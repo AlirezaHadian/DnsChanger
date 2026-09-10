@@ -7,24 +7,41 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Navigation;
 using System.Windows.Threading;
+using System.Collections.ObjectModel;
+using System.Net;
+using DnsChanger.Repository;
 
 namespace DnsChanger
 {
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
     public partial class MainWindow : Window
     {
         private readonly IDnsService _dnsService;
+        private readonly ICustomDnsRepository _customDnsRepository;
+        private readonly ObservableCollection<CustomDnsEntry> _customDnsEntries = new ();
         private DispatcherTimer _messageTimer;
-        public MainWindow(IDnsService dnsService)
+        public MainWindow(IDnsService dnsService, ICustomDnsRepository customDnsRepository)
         {
             InitializeComponent();
+            
             _dnsService = dnsService;
+            _customDnsRepository = customDnsRepository;
+
+            CustomDnsItemsControl.ItemsSource = _customDnsEntries;
+            LoadCustomDnsEntries();
+
             _messageTimer = new DispatcherTimer();
             _messageTimer.Interval = TimeSpan.FromSeconds(5);
             _messageTimer.Tick += MessageTimer_Tick;
         }
+        private void LoadCustomDnsEntries()
+        {
+            _customDnsEntries.Clear();
+            foreach (var entry in _customDnsRepository.GetAllDns())
+            {
+                _customDnsEntries.Add(entry);
+            }
+        }
+
         private void MessageTimer_Tick(object sender, EventArgs e)
         {
             MessageTextBlock.Visibility = Visibility.Hidden;
@@ -56,25 +73,75 @@ namespace DnsChanger
             AdminPermissionCheck();
             _dnsService.UnsetDns();
 
-            MessageTextBlock.Content = "DNS Reset!";
+            MessageTextBlock.Text = "DNS Reset!";
             MessageTextBlock.Visibility = Visibility.Visible;
             MessageTextBlock.Background = new SolidColorBrush(Colors.Red);
             _messageTimer.Stop();
             _messageTimer.Start();
+        }
+        private void AddCustomDnsButton_Click(object sender, RoutedEventArgs e)
+        {
+            string name = CustomNameBox.Text.Trim();
+            string primary = CustomPrimaryBox.Text.Trim();
+            string secondary = CustomSecondaryBox.Text.Trim();
+
+            if(string.IsNullOrEmpty(name) || !IPAddress.TryParse(primary, out _))
+            {
+                MessageBox.Show("Please enter a valid name and a valid IP for Primary DNS.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+            if(string.IsNullOrWhiteSpace(secondary) && !IPAddress.TryParse(primary, out _))
+            {
+                MessageBox.Show("Secondary DNS is not valid", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            var entry = new CustomDnsEntry
+            {
+                Name = name,
+                Primary = primary,
+                Secondary = string.IsNullOrWhiteSpace(secondary) ? null : secondary,
+                CreatedAt = DateTime.Now
+            };
+
+            _customDnsRepository.Add(entry);
+            LoadCustomDnsEntries();
+
+            CustomNameBox.Clear();
+            CustomPrimaryBox.Clear();
+            CustomSecondaryBox.Clear();
+
+            AdminPermissionCheck();
+            ApplyProviderAndNotify(new DnsProvider { Name = entry.Name, Primary = entry.Primary, Secondary = entry.Secondary });
+        }
+        private void ApplyCustomDns_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as Button)?.Tag is CustomDnsEntry entry)
+            {
+                AdminPermissionCheck();
+                ApplyProviderAndNotify(new DnsProvider { Name = entry.Name, Primary = entry.Primary, Secondary = entry.Secondary });
+            }
+        }
+
+        private void DeleteCustomDns_Click(object sender, RoutedEventArgs e)
+        {
+            if ((sender as Button)?.Tag is CustomDnsEntry entry)
+            {
+                _customDnsRepository.Delete(entry.Id);
+                LoadCustomDnsEntries();
+            }
         }
 
         private void ApplyProviderAndNotify(DnsProvider provider)
         {
             _dnsService.SetDns(provider);
 
-            MessageTextBlock.Content = $"{provider.Name} DNS Set!";
+            MessageTextBlock.Text = $"{provider.Name} DNS Set!";
             MessageTextBlock.Visibility = Visibility.Visible;
             MessageTextBlock.Background = new SolidColorBrush(Colors.Green);
             _messageTimer.Stop();
             _messageTimer.Start();
         }
-
-        
         public static void AdminPermissionCheck()
         {
             bool isAdmin = new WindowsPrincipal(WindowsIdentity.GetCurrent())

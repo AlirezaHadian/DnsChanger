@@ -1,4 +1,5 @@
-﻿using DnsChanger.Services;
+﻿using DnsChanger.Repository;
+using DnsChanger.Services;
 using Microsoft.Extensions.DependencyInjection;
 using System.Configuration;
 using System.Data;
@@ -14,6 +15,8 @@ namespace DnsChanger
         {
             base.OnStartup(e);
 
+            DnsChanger.Data.DatabaseInitializer.Initialize();
+
             var services = new ServiceCollection();
             ConfigureServices(services);
             _serviceProvider = services.BuildServiceProvider();
@@ -25,6 +28,7 @@ namespace DnsChanger
         private void ConfigureServices(ServiceCollection services)
         {
             services.AddSingleton<IDnsService, DnsService>();
+            services.AddSingleton<ICustomDnsRepository, CustomDnsRepository>();
             services.AddTransient<MainWindow>();
         }
 
