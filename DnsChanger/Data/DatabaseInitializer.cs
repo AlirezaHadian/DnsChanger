@@ -29,10 +29,37 @@ namespace DnsChanger.Data
                     Id INTEGER PRIMARY KEY AUTOINCREMENT,
                     Name TEXT NOT NULL,
                     PrimaryDns TEXT NOT NULL,
-                    SecondaryDns TEXT NOT NULL,
-                    CreatedAt DATETIME NOT NULL
+                    SecondaryDns TEXT,
+                    CreatedAt TEXT NOT NULL
                 );";
             command.ExecuteNonQuery();
+
+            var checkCommand = connection.CreateCommand();
+            checkCommand.CommandText = "SELECT COUNT(*) FROM CustomDnsEntries";
+            long count = (long)checkCommand.ExecuteScalar();
+
+            if (count == 0)
+            {
+                var seedData = new (string Name, string Primary, string Secondary)[]
+                {
+                    ("Shecan", "178.22.122.100", "185.51.200.2"),
+                    ("Bogzar", "185.55.226.26", "185.55.225.25"),
+                    ("403", "10.202.10.202", "10.202.10.102"),
+                };
+
+                foreach (var (name, primary, secondary) in seedData)
+                {
+                    var insertCommand = connection.CreateCommand();
+                    insertCommand.CommandText = @"
+                    INSERT INTO CustomDnsEntries (Name, PrimaryDns, SecondaryDns, CreatedAt)
+                    VALUES ($name, $primary, $secondary, $createdAt);";
+                    insertCommand.Parameters.AddWithValue("$name", name);
+                    insertCommand.Parameters.AddWithValue("$primary", primary);
+                    insertCommand.Parameters.AddWithValue("$secondary", secondary);
+                    insertCommand.Parameters.AddWithValue("$createdAt", DateTime.Now.ToString("o"));
+                    insertCommand.ExecuteNonQuery();
+                }
+            }
         }
     }
 }

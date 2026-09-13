@@ -3,6 +3,8 @@ using DnsChanger.Services;
 using Microsoft.Extensions.DependencyInjection;
 using System.Configuration;
 using System.Data;
+using System.IO;
+using System.Text.Json;
 using System.Windows;
 
 namespace DnsChanger
@@ -38,5 +40,30 @@ namespace DnsChanger
             base.OnExit(e);
         }
     }
+    public class AppSettings
+    {
+        public bool IsDarkMode { get; set; } = true;
+        public string AccentName { get; set; } = "BluePurple";
+
+        private static string SettingsPath => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "DnsChanger", "settings.json");
+
+        public static AppSettings Load()
+        {
+            if (File.Exists(SettingsPath))
+                return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(SettingsPath)) ?? new AppSettings();
+            return new AppSettings();
+        }
+
+        public void Save()
+        {
+            var directory = Path.GetDirectoryName(SettingsPath);
+            if (!Directory.Exists(directory))
+                Directory.CreateDirectory(directory);
+            File.WriteAllText(SettingsPath, JsonSerializer.Serialize(this));
+        }
+    }
+
 
 }
