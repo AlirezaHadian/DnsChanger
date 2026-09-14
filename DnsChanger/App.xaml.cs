@@ -31,6 +31,7 @@ namespace DnsChanger
         {
             services.AddSingleton<IDnsService, DnsService>();
             services.AddSingleton<ICustomDnsRepository, CustomDnsRepository>();
+            services.AddSingleton<INetworkDiagnosticsService, NetworkDiagnosticsService>();
             services.AddTransient<MainWindow>();
         }
 

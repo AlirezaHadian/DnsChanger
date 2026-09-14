@@ -433,19 +433,28 @@
                             <TextBlock Text="سرورهای DNS" Style="{StaticResource PageTitleStyle}"/>
                             <TextBlock Text="تغییر سریع DNS با یک کلیک" Style="{StaticResource PageSubtitleStyle}" Margin="0,3,0,0"/>
                         </StackPanel>
-                        <Button Grid.Column="1" x:Name="CheckPingButton" Style="{StaticResource SecondaryButtonStyle}"
-                                Padding="12,7" Click="CheckPingButton_Click" VerticalAlignment="Center">
-                            <StackPanel Orientation="Horizontal">
-                                <Viewbox Width="13" Height="13" Margin="8,0,0,0">
-                                    <Canvas Width="24" Height="24">
-                                        <Rectangle Width="4" Height="6" Canvas.Left="2" Canvas.Top="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" RadiusX="1" RadiusY="1"/>
-                                        <Rectangle Width="4" Height="10" Canvas.Left="10" Canvas.Top="10" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" RadiusX="1" RadiusY="1"/>
-                                        <Rectangle Width="4" Height="14" Canvas.Left="18" Canvas.Top="6" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" RadiusX="1" RadiusY="1"/>
-                                    </Canvas>
-                                </Viewbox>
-                                <TextBlock Text="بررسی پینگ همه" FontSize="12"/>
-                            </StackPanel>
-                        </Button>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button x:Name="ResetDnsButton" Style="{StaticResource SecondaryButtonStyle}"
+                                    Padding="12,7" Click="Reset_Click" Margin="0,0,8,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="↺" FontSize="13" Margin="8,0,0,0"/>
+                                    <TextBlock Text="بازنشانی DNS" FontSize="12"/>
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="CheckPingButton" Style="{StaticResource SecondaryButtonStyle}"
+                                    Padding="12,7" Click="CheckPingButton_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <Viewbox Width="13" Height="13" Margin="8,0,0,0">
+                                        <Canvas Width="24" Height="24">
+                                            <Rectangle Width="4" Height="6" Canvas.Left="2" Canvas.Top="14" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" RadiusX="1" RadiusY="1"/>
+                                            <Rectangle Width="4" Height="10" Canvas.Left="10" Canvas.Top="10" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" RadiusX="1" RadiusY="1"/>
+                                            <Rectangle Width="4" Height="14" Canvas.Left="18" Canvas.Top="6" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" RadiusX="1" RadiusY="1"/>
+                                        </Canvas>
+                                    </Viewbox>
+                                    <TextBlock Text="بررسی پینگ همه" FontSize="12"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
                     </Grid>
 
                     <!--  نوار وضعیت اتصال فعلی  -->
@@ -690,12 +699,34 @@
                                         <Line X1="13" Y1="13" X2="20" Y2="20" Stroke="{DynamicResource AccentBlue}" StrokeThickness="2" StrokeStartLineCap="Round"/>
                                     </Canvas>
                                 </Viewbox>
-                                <TextBlock Text="عیب‌یاب شبکه ویندوز" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" Margin="0,8,0,2"/>
-                                <TextBlock Text="اجرای ابزار تشخیص مشکل شبکه ویندوز" FontSize="11" Foreground="{DynamicResource TextSecondary}" Margin="0,0,0,12" TextWrapping="Wrap"/>
-                                <Button x:Name="WindowsTroubleshooterButton" Content="اجرا" Style="{StaticResource SecondaryButtonStyle}" HorizontalAlignment="Left"/>
+                                <TextBlock Text="تشخیص و رفع خودکار" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" Margin="0,8,0,2"/>
+                                <TextBlock Text="بررسی آداپتور، DNS و اتصال اینترنت با ابزار خودمان" FontSize="11" Foreground="{DynamicResource TextSecondary}" Margin="0,0,0,12" TextWrapping="Wrap"/>
+                                <Button x:Name="RunDiagnosticsButton" Content="شروع بررسی" Style="{StaticResource SecondaryButtonStyle}" HorizontalAlignment="Left" Click="RunDiagnosticsButton_Click"/>
                             </StackPanel>
                         </Border>
                     </UniformGrid>
+
+                    <!--  نتیجه‌ی تشخیص خودکار  -->
+                    <TextBlock Text="نتیجه‌ی بررسی" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" Margin="0,22,0,10"/>
+                    <ItemsControl x:Name="DiagnosticsResultsItemsControl">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{DynamicResource BgCard}" CornerRadius="10" Padding="12,10" Margin="0,0,0,8" Cursor="Arrow">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Ellipse Grid.Column="0" Width="10" Height="10" Fill="{Binding StatusColor}" VerticalAlignment="Center"/>
+                                        <StackPanel Grid.Column="1" Margin="10,0,0,0">
+                                            <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
+                                            <TextBlock Text="{Binding Message}" FontSize="11" Foreground="{DynamicResource TextSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </StackPanel>
 
                 <!--  ///////////////////// صفحه Wi-Fi ///////////////////// -->

@@ -18,12 +18,13 @@ namespace DnsChanger.Services
                 (a.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 || a.NetworkInterfaceType == NetworkInterfaceType.Ethernet) &&
                 a.GetIPProperties().GatewayAddresses.Any(g => g.Address.AddressFamily.ToString() == "InterNetwork"));
         }
+
         public void SetDns(DnsProvider provider)
         {
             var activeInterface = GetActiveAdapter();
             if (activeInterface == null) return;
 
-            string[] dns = {provider.Primary, provider.Secondary };
+            string[] dns = { provider.Primary, provider.Secondary };
 
             ApplyToActiveAdapter(activeInterface, dns);
         }
@@ -39,9 +40,10 @@ namespace DnsChanger.Services
         {
             ManagementClass objMC = new ManagementClass("Win32_NetworkAdapterConfiguration");
             ManagementObjectCollection objMOC = objMC.GetInstances();
-            foreach(ManagementObject objMO in objMOC)
+            foreach (ManagementObject objMO in objMOC)
             {
-                if ((bool)objMO["IPEnabled"])
+
+                if ((bool)objMO["IPEnabled"] && objMO["Description"]?.ToString() == activeInterface.Description)
                 {
                     ManagementBaseObject objdns = objMO.GetMethodParameters("SetDNSServerSearchOrder");
                     if (objdns != null)
@@ -52,5 +54,24 @@ namespace DnsChanger.Services
                 }
             }
         }
+
+        public void RestartActiveAdapter()
+        {
+            var activeInterface = GetActiveAdapter();
+            if (activeInterface == null) return;
+
+            ManagementClass objMC = new ManagementClass("Win32_NetworkAdapter");
+            foreach (ManagementObject objMO in objMC.GetInstances())
+            {
+                if (objMO["NetConnectionID"]?.ToString() == activeInterface.Name)
+                {
+                    objMO.InvokeMethod("Disable", null);
+                    System.Threading.Thread.Sleep(2000);
+                    objMO.InvokeMethod("Enable", null);
+                }
+            }
+        }
+
+
     }
 }

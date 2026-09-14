@@ -17,13 +17,15 @@ namespace DnsChanger
     {
         private readonly IDnsService _dnsService;
         private readonly ICustomDnsRepository _customDnsRepository;
-        private readonly ObservableCollection<CustomDnsEntry> _customDnsEntries = new ();
+        private readonly INetworkDiagnosticsService _diagnosticsService;
+        private readonly ObservableCollection<CustomDnsEntry> _customDnsEntries = new();
         private DispatcherTimer _messageTimer;
-        public MainWindow(IDnsService dnsService, ICustomDnsRepository customDnsRepository)
+        public MainWindow(IDnsService dnsService, ICustomDnsRepository customDnsRepository, INetworkDiagnosticsService diagnosticsService)
         {
             InitializeComponent();
             _dnsService = dnsService;
             _customDnsRepository = customDnsRepository;
+            _diagnosticsService = diagnosticsService;
 
             CustomDnsItemsControl.ItemsSource = _customDnsEntries;
             LoadCustomDnsEntries();
@@ -161,6 +163,36 @@ namespace DnsChanger
         }
         #endregion
         #region Troubleshoot
+        private async void RunDiagnosticsButton_Click(object sender, RoutedEventArgs e)
+        {
+            RunDiagnosticsButton.IsEnabled = false;
+            RunDiagnosticsButton.Content = "در حال بررسی...";
+            DiagnosticsResultsItemsControl.ItemsSource = null;
+
+            var results = await _diagnosticsService.RunDiagnosticsAsync();
+            DiagnosticsResultsItemsControl.ItemsSource = results;
+
+            RunDiagnosticsButton.IsEnabled = true;
+            RunDiagnosticsButton.Content = "شروع بررسی";
+        }
+        private async void FlushDnsButton_Click(object sender, RoutedEventArgs e)
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo("ipconfig", "/flushdns")
+            {
+                CreateNoWindow = true,
+                UseShellExecute = false
+            };
+            using var process = System.Diagnostics.Process.Start(psi);
+            process.WaitForExit();
+            ShowMessage("DNS Cache پاک شد!", isSuccess: true);
+        }
+
+        private void RestartAdapterButton_Click(object sender, RoutedEventArgs e)
+        {
+            AdminPermissionCheck();
+            _dnsService.RestartActiveAdapter();
+            ShowMessage("آداپتور ری‌استارت شد!", isSuccess: true);
+        }
         #endregion
         #region Wifi
         private void ConnectWifi_Click(object sender, RoutedEventArgs e)
@@ -180,17 +212,17 @@ namespace DnsChanger
             string targetPage = clickedButton.Tag?.ToString();
 
             DnsPagePanel.Visibility = Visibility.Collapsed;
-            HistoryListBox.Visibility = Visibility.Collapsed;
+            HistoryPagePanel.Visibility = Visibility.Collapsed;
             SpeedTestPagePanel.Visibility = Visibility.Collapsed;
             TroubleshootPagePanel.Visibility = Visibility.Collapsed;
             WifiPagePanel.Visibility = Visibility.Collapsed;
             SettingsPagePanel.Visibility = Visibility.Collapsed;
-            
+
             // نمایش فقط صفحه‌ی انتخاب‌شده
             switch (targetPage)
             {
                 case "Dns": DnsPagePanel.Visibility = Visibility.Visible; break;
-                case "History": HistoryListBox.Visibility = Visibility.Visible; break;
+                case "History": HistoryPagePanel.Visibility = Visibility.Visible; break;
                 case "SpeedTest": SpeedTestPagePanel.Visibility = Visibility.Visible; break;
                 case "Troubleshoot": TroubleshootPagePanel.Visibility = Visibility.Visible; break;
                 case "Wifi": WifiPagePanel.Visibility = Visibility.Visible; break;
@@ -245,7 +277,7 @@ namespace DnsChanger
             DarkModeButton.Tag = null;
 
             var settings = AppSettings.Load();
-            settings.IsDarkMode = false; 
+            settings.IsDarkMode = false;
             settings.Save();
         }
         private void AccentSwatch_Click(object sender, RoutedEventArgs e)
@@ -267,7 +299,7 @@ namespace DnsChanger
             clickedSwatch.Tag = "Selected";
 
             var settings = AppSettings.Load();
-            settings.AccentName = clickedSwatch.Name;  
+            settings.AccentName = clickedSwatch.Name;
             settings.Save();
         }
         private static Color Darken(Color c, double factor) =>
