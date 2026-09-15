@@ -3,6 +3,77 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:DnsChanger">
     <Application.Resources>
-         
+        <!--  رنگ‌های اصلی تم — Dynamic تا بشه از صفحه‌ی تنظیمات در لحظه عوضشون کرد  -->
+        <SolidColorBrush x:Key="BgDark" Color="#0F1117"/>
+        <SolidColorBrush x:Key="BgCard" Color="#1A1D29"/>
+        <SolidColorBrush x:Key="BgCardHover" Color="#232739"/>
+        <SolidColorBrush x:Key="BgInput" Color="#12141C"/>
+        <SolidColorBrush x:Key="BgChip" Color="#1E293B"/>
+        <SolidColorBrush x:Key="BorderColor" Color="#2A2E3F"/>
+        <SolidColorBrush x:Key="TextMuted" Color="#565B6B"/>
+        <SolidColorBrush x:Key="AccentBlue" Color="#5B8CFF"/>
+        <SolidColorBrush x:Key="AccentPurple" Color="#8B5CF6"/>
+        <SolidColorBrush x:Key="TextPrimary" Color="#F1F2F6"/>
+        <SolidColorBrush x:Key="TextSecondary" Color="#8A8F9E"/>
+        <SolidColorBrush x:Key="Success" Color="#22C55E"/>
+        <SolidColorBrush x:Key="Danger" Color="#EF4444"/>
+        <SolidColorBrush x:Key="SidebarBg" Color="#151822"/>
+
+        <LinearGradientBrush x:Key="AccentGradient" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#5B8CFF" Offset="0"/>
+            <GradientStop Color="#8B5CF6" Offset="1"/>
+        </LinearGradientBrush>
+
+
+        <!--  دکمه‌ی اصلی (اعمال DNS)  -->
+        <Style x:Key="ApplyButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource AccentGradient}"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="14,8"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Opacity" Value="0.85"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!--  دکمه‌ی ثانویه  -->
+        <Style x:Key="SecondaryButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderColor}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="14,8"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="{DynamicResource AccentBlue}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
     </Application.Resources>
 </Application>

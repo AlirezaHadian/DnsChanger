@@ -34,6 +34,16 @@ namespace DnsChanger.Data
                 );";
             command.ExecuteNonQuery();
 
+            var logCommand = connection.CreateCommand();
+            logCommand.CommandText = @"
+    CREATE TABLE IF NOT EXISTS ActivityLog (
+        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+        Title TEXT NOT NULL,
+        Details TEXT,
+        Timestamp TEXT NOT NULL
+    );";
+            logCommand.ExecuteNonQuery();
+
             var checkCommand = connection.CreateCommand();
             checkCommand.CommandText = "SELECT COUNT(*) FROM CustomDnsEntries";
             long count = (long)checkCommand.ExecuteScalar();

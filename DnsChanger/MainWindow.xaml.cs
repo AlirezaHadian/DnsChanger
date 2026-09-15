@@ -10,6 +10,7 @@ using System.Windows.Threading;
 using System.Collections.ObjectModel;
 using System.Net;
 using DnsChanger.Repository;
+using System.Net.NetworkInformation;
 
 namespace DnsChanger
 {
@@ -18,18 +19,29 @@ namespace DnsChanger
         private readonly IDnsService _dnsService;
         private readonly ICustomDnsRepository _customDnsRepository;
         private readonly INetworkDiagnosticsService _diagnosticsService;
+        private readonly IActivityLogRepository _activityLog;
+        private readonly IPingService _pingService;
+        private readonly ISpeedTestService _speedTestService;
         private readonly ObservableCollection<CustomDnsEntry> _customDnsEntries = new();
         private DispatcherTimer _messageTimer;
-        public MainWindow(IDnsService dnsService, ICustomDnsRepository customDnsRepository, INetworkDiagnosticsService diagnosticsService)
+        public MainWindow(IDnsService dnsService, ICustomDnsRepository customDnsRepository, INetworkDiagnosticsService diagnosticsService,
+            IActivityLogRepository activityLog, IPingService pingService, ISpeedTestService speedTestService)
         {
             InitializeComponent();
             _dnsService = dnsService;
             _customDnsRepository = customDnsRepository;
             _diagnosticsService = diagnosticsService;
+            _activityLog = activityLog;
+            _pingService = pingService;
+            _speedTestService = speedTestService;
 
             CustomDnsItemsControl.ItemsSource = _customDnsEntries;
             LoadCustomDnsEntries();
             ApplySavedSettings();
+            RefreshConnectionStatus();
+
+            NetworkChange.NetworkAvailabilityChanged += NetworkChange_NetworkAvailabilityChanged;
+            NetworkChange.NetworkAddressChanged += NetworkChange_NetworkAddressChanged;
 
             _messageTimer = new DispatcherTimer();
             _messageTimer.Interval = TimeSpan.FromSeconds(5);
@@ -42,7 +54,7 @@ namespace DnsChanger
 
             if (!isAdmin)
             {
-                MessageBox.Show("Please run as Administrator");
+                CustomDialog.ShowWarning("برای اعمال تغییرات شبکه، برنامه رو با دسترسی Administrator اجرا کن.");
                 return;
             }
         }
@@ -60,6 +72,12 @@ namespace DnsChanger
                 AccentSwatch_Click(savedSwatch, null);
             }
         }
+        protected override void OnClosed(EventArgs e)
+        {
+            NetworkChange.NetworkAvailabilityChanged -= NetworkChange_NetworkAvailabilityChanged;
+            NetworkChange.NetworkAddressChanged -= NetworkChange_NetworkAddressChanged;
+            base.OnClosed(e);
+        }
         #region DNS 
         /// <summary>
         /// Function
@@ -75,6 +93,9 @@ namespace DnsChanger
         private void ApplyProviderAndNotify(DnsProvider provider)
         {
             _dnsService.SetDns(provider);
+            _activityLog.Add($"{provider.Name} DNS ست شد", $"{provider.Primary}, {provider.Secondary}");
+            LoadHistory();
+            RefreshConnectionStatus();
             ShowMessage($"{provider.Name} DNS Set!", isSuccess: true);
         }
         private void ShowMessage(string text, bool isSuccess)
@@ -88,6 +109,43 @@ namespace DnsChanger
             _messageTimer.Stop();
             _messageTimer.Start();
         }
+        private async void RefreshConnectionStatus()
+        {
+            var adapter = _dnsService.GetActiveAdapter();
+
+            if (adapter == null)
+            {
+                ActiveAdapterText.Text = "—";
+                CurrentDnsText.Text = "—";
+                PublicIpText.Text = "—";
+                ConnectionStatusText.Text = "قطع";
+                ConnectionStatusText.Foreground = (Brush)FindResource("Danger");
+                ConnectionStatusDot.Fill = (Brush)FindResource("Danger");
+                return;
+            }
+
+            ActiveAdapterText.Text = adapter.Name;
+
+            var dnsAddresses = adapter.GetIPProperties().DnsAddresses;
+            CurrentDnsText.Text = dnsAddresses.Count > 0
+                ? string.Join(", ", dnsAddresses)
+                : "خودکار (DHCP)";
+
+            ConnectionStatusText.Text = "متصل";
+            ConnectionStatusText.Foreground = (Brush)FindResource("Success");
+            ConnectionStatusDot.Fill = (Brush)FindResource("Success");
+
+            PublicIpText.Text = "در حال گرفتن...";
+            try
+            {
+                using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+                PublicIpText.Text = await client.GetStringAsync("https://api.ipify.org");
+            }
+            catch
+            {
+                PublicIpText.Text = "نامشخص";
+            }
+        }
         /// <summary>
         /// Events
         /// </summary>
@@ -100,7 +158,9 @@ namespace DnsChanger
         {
             AdminPermissionCheck();
             _dnsService.UnsetDns();
-
+            _activityLog.Add("DNS به حالت خودکار (DHCP) بازنشانی شد");
+            LoadHistory();
+            RefreshConnectionStatus();
             ShowMessage("DNS Reset!", isSuccess: false);
         }
         private void AddCustomDnsButton_Click(object sender, RoutedEventArgs e)
@@ -111,12 +171,12 @@ namespace DnsChanger
 
             if (string.IsNullOrEmpty(name) || !IPAddress.TryParse(primary, out _))
             {
-                MessageBox.Show("Please enter a valid name and a valid IP for Primary DNS.", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                CustomDialog.ShowError("لطفاً یک نام و یک IP معتبر برای Primary DNS وارد کن.", "خطا");
                 return;
             }
             if (string.IsNullOrWhiteSpace(secondary) && !IPAddress.TryParse(primary, out _))
             {
-                MessageBox.Show("Secondary DNS is not valid", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                CustomDialog.ShowError("Secondary DNS معتبر نیست.", "خطا");
                 return;
             }
 
@@ -129,6 +189,8 @@ namespace DnsChanger
             };
 
             _customDnsRepository.Add(entry);
+            _activityLog.Add($"DNS «{entry.Name}» اضافه شد", $"{entry.Primary}, {entry.Secondary}");
+            LoadHistory();
             LoadCustomDnsEntries();
 
             CustomNameBox.Clear();
@@ -149,17 +211,106 @@ namespace DnsChanger
             {
                 _customDnsRepository.Delete(entry.Id);
                 LoadCustomDnsEntries();
+                _activityLog.Add($"DNS «{entry.Name}» حذف شد");
+                LoadHistory();
             }
         }
-        private void CheckPingButton_Click(object sender, RoutedEventArgs e)
+        private async void CheckPingButton_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show("تست Ping واقعی رو قدم بعد با هم می‌زنیم.");
+            CheckPingButton.IsEnabled = false;
+
+            var tasks = _customDnsEntries.Select(async entry =>
+            {
+                entry.PingText = "...";
+                var ms = await _pingService.PingAsync(entry.Primary);
+                entry.PingText = ms.HasValue ? $"{ms} ms" : "timeout";
+            });
+            await Task.WhenAll(tasks);
+
+            CheckPingButton.IsEnabled = true;
+        }
+        private void NetworkChange_NetworkAvailabilityChanged(object sender, NetworkAvailabilityEventArgs e)
+        {
+            Dispatcher.Invoke(RefreshConnectionStatus);
+        }
+        private void NetworkChange_NetworkAddressChanged(object sender, EventArgs e)
+        {
+            Dispatcher.Invoke(RefreshConnectionStatus);
         }
         #endregion
         #region SpeedTest
-        private void StartSpeedTestButton_Click(object sender, RoutedEventArgs e)
+        //private async void StartSpeedTestButton_Click(object sender, RoutedEventArgs e)
+        //{
+        //    StartSpeedTestButton.IsEnabled = false;
+        //    DownloadSpeedText.Text = "—";
+        //    UploadSpeedText.Text = "—";
+        //    DownloadSpeedMBText.Text = "— MB/s";
+        //    UploadSpeedMBText.Text = "— MB/s";
+        //    PingResultText.Text = "—";
+        //    DataCenterText.Text = "—";
+
+        //    var progress = new Progress<string>(status => SpeedTestStatusText.Text = status);
+        //    var result = await _speedTestService.RunTestAsync(progress);
+
+        //    DownloadSpeedText.Text = result.DownloadMbps.ToString("0.0");
+        //    UploadSpeedText.Text = result.UploadMbps.ToString("0.0");
+        //    DownloadSpeedMBText.Text = $"{(result.DownloadMbps / 8):0.0} MB/s";
+        //    UploadSpeedMBText.Text = $"{(result.UploadMbps / 8):0.0} MB/s";
+        //    PingResultText.Text = result.PingMs.ToString();
+        //    DataCenterText.Text = result.DataCenter;
+
+        //    _activityLog.Add("تست سرعت اجرا شد",
+        //$"دانلود: {result.DownloadMbps} Mbps, آپلود: {result.UploadMbps} Mbps, پینگ: {result.PingMs}ms");
+        //    LoadHistory();
+
+        //    StartSpeedTestButton.IsEnabled = true;
+        //}
+
+        //New: check this
+        private async void StartSpeedTestButton_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show("تست سرعت واقعی رو یه قدم جدا پیاده می‌کنیم.");
+            StartSpeedTestButton.IsEnabled = false;
+            DownloadSpeedText.Text = "—";
+            UploadSpeedText.Text = "—";
+            DownloadSpeedMBText.Text = "— MB/s";
+            UploadSpeedMBText.Text = "— MB/s";
+            PingResultText.Text = "—";
+            DataCenterText.Text = "—";
+
+            var progress = new Progress<SpeedTestProgress>(p =>
+            {
+                SpeedTestStatusText.Text = p.Phase;
+                SpeedTestLiveNumber.Text = p.CurrentMbps.ToString("0.0");
+                UpdateProgressRing(p.PercentComplete);
+            });
+
+            var result = await _speedTestService.RunTestAsync(progress);
+
+            DownloadSpeedText.Text = result.DownloadMbps.ToString("0.0");
+            UploadSpeedText.Text = result.UploadMbps.ToString("0.0");
+            DownloadSpeedMBText.Text = $"{(result.DownloadMbps / 8):0.0} MB/s";
+            UploadSpeedMBText.Text = $"{(result.UploadMbps / 8):0.0} MB/s";
+            PingResultText.Text = result.PingMs.ToString();
+            DataCenterText.Text = result.DataCenter;
+
+            SpeedTestLiveNumber.Text = "0.0";
+            SpeedTestStatusText.Text = "آماده";
+            UpdateProgressRing(0);
+
+            _activityLog.Add("تست سرعت اجرا شد",
+                $"دانلود: {result.DownloadMbps} Mbps, آپلود: {result.UploadMbps} Mbps, پینگ: {result.PingMs}ms");
+            LoadHistory();
+
+            StartSpeedTestButton.IsEnabled = true;
+        }
+        private void UpdateProgressRing(double percent) // and check this
+        {
+            const double radius = 90;
+            const double thickness = 10;
+            double circumferenceInUnits = (2 * Math.PI * radius) / thickness;
+            double dash = Math.Max(0.001, percent / 100.0 * circumferenceInUnits);
+            double gap = Math.Max(0.001, circumferenceInUnits - dash);
+            SpeedTestProgressRing.StrokeDashArray = new System.Windows.Media.DoubleCollection { dash, gap };
         }
         #endregion
         #region Troubleshoot
@@ -171,6 +322,10 @@ namespace DnsChanger
 
             var results = await _diagnosticsService.RunDiagnosticsAsync();
             DiagnosticsResultsItemsControl.ItemsSource = results;
+
+            bool overallOk = results.Count > 0 && results[^1].IsSuccess;
+            _activityLog.Add("تشخیص و رفع خودکار اجرا شد", overallOk ? "نتیجه: موفق" : "نتیجه: مشکل حل نشد");
+            LoadHistory();
 
             RunDiagnosticsButton.IsEnabled = true;
             RunDiagnosticsButton.Content = "شروع بررسی";
@@ -184,20 +339,43 @@ namespace DnsChanger
             };
             using var process = System.Diagnostics.Process.Start(psi);
             process.WaitForExit();
+            _activityLog.Add("DNS Cache پاک‌سازی شد");
+            LoadHistory();
             ShowMessage("DNS Cache پاک شد!", isSuccess: true);
         }
-
         private void RestartAdapterButton_Click(object sender, RoutedEventArgs e)
         {
             AdminPermissionCheck();
             _dnsService.RestartActiveAdapter();
+            _activityLog.Add("آداپتور شبکه ری‌استارت شد");
+            LoadHistory();
             ShowMessage("آداپتور ری‌استارت شد!", isSuccess: true);
+        }
+        private void ClearHistoryButton_Click(object sender, RoutedEventArgs e)
+        {
+            //var confirm = MessageBox.Show("کل تاریخچه پاک بشه؟", "تایید", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            //if (confirm == MessageBoxResult.Yes)
+            //{
+            //    _activityLog.DeleteAll();
+            //    LoadHistory();
+            //}
+            if (CustomDialog.Confirm("کل تاریخچه پاک بشه؟"))
+            {
+                _activityLog.DeleteAll();
+                LoadHistory();
+            }
         }
         #endregion
         #region Wifi
         private void ConnectWifi_Click(object sender, RoutedEventArgs e)
         {
-            MessageBox.Show("اسکن و اتصال Wi-Fi واقعی رو بعدا با هم می‌سازیم.");
+            CustomDialog.ShowInfo("اسکن و اتصال Wi-Fi واقعی رو بعداً با هم می‌سازیم.");
+        }
+        #endregion
+        #region History
+        private void LoadHistory()
+        {
+            HistoryListBox.ItemsSource = _activityLog.GetRecent();
         }
         #endregion
         #region Settings
@@ -242,16 +420,16 @@ namespace DnsChanger
         }
         private void DarkModeButton_Click(object sender, RoutedEventArgs e)
         {
-            Resources["BgDark"] = new SolidColorBrush(Color.FromRgb(0x0F, 0x11, 0x17));
-            Resources["BgCard"] = new SolidColorBrush(Color.FromRgb(0x1A, 0x1D, 0x29));
-            Resources["BgCardHover"] = new SolidColorBrush(Color.FromRgb(0x23, 0x27, 0x39));
-            Resources["BgInput"] = new SolidColorBrush(Color.FromRgb(0x12, 0x14, 0x1C));
-            Resources["BgChip"] = new SolidColorBrush(Color.FromRgb(0x1E, 0x29, 0x3B));
-            Resources["BorderColor"] = new SolidColorBrush(Color.FromRgb(0x2A, 0x2E, 0x3F));
-            Resources["TextMuted"] = new SolidColorBrush(Color.FromRgb(0x56, 0x5B, 0x6B));
-            Resources["TextPrimary"] = new SolidColorBrush(Color.FromRgb(0xF1, 0xF2, 0xF6));
-            Resources["TextSecondary"] = new SolidColorBrush(Color.FromRgb(0x8A, 0x8F, 0x9E));
-            Resources["SidebarBg"] = new SolidColorBrush(Color.FromRgb(0x15, 0x18, 0x22));
+            Application.Current.Resources["BgDark"] = new SolidColorBrush(Color.FromRgb(0x0F, 0x11, 0x17));
+            Application.Current.Resources["BgCard"] = new SolidColorBrush(Color.FromRgb(0x1A, 0x1D, 0x29));
+            Application.Current.Resources["BgCardHover"] = new SolidColorBrush(Color.FromRgb(0x23, 0x27, 0x39));
+            Application.Current.Resources["BgInput"] = new SolidColorBrush(Color.FromRgb(0x12, 0x14, 0x1C));
+            Application.Current.Resources["BgChip"] = new SolidColorBrush(Color.FromRgb(0x1E, 0x29, 0x3B));
+            Application.Current.Resources["BorderColor"] = new SolidColorBrush(Color.FromRgb(0x2A, 0x2E, 0x3F));
+            Application.Current.Resources["TextMuted"] = new SolidColorBrush(Color.FromRgb(0x56, 0x5B, 0x6B));
+            Application.Current.Resources["TextPrimary"] = new SolidColorBrush(Color.FromRgb(0xF1, 0xF2, 0xF6));
+            Application.Current.Resources["TextSecondary"] = new SolidColorBrush(Color.FromRgb(0x8A, 0x8F, 0x9E));
+            Application.Current.Resources["SidebarBg"] = new SolidColorBrush(Color.FromRgb(0x15, 0x18, 0x22));
 
             DarkModeButton.Tag = "Selected";
             LightModeButton.Tag = null;
@@ -262,16 +440,16 @@ namespace DnsChanger
         }
         private void LightModeButton_Click(object sender, RoutedEventArgs e)
         {
-            Resources["BgDark"] = new SolidColorBrush(Color.FromRgb(0xF5, 0xF6, 0xFA));
-            Resources["BgCard"] = new SolidColorBrush(Colors.White);
-            Resources["BgCardHover"] = new SolidColorBrush(Color.FromRgb(0xEC, 0xED, 0xF2));
-            Resources["BgInput"] = new SolidColorBrush(Color.FromRgb(0xF0, 0xF1, 0xF5));
-            Resources["BgChip"] = new SolidColorBrush(Color.FromRgb(0xE2, 0xE5, 0xEC));
-            Resources["BorderColor"] = new SolidColorBrush(Color.FromRgb(0xDD, 0xE0, 0xE6));
-            Resources["TextMuted"] = new SolidColorBrush(Color.FromRgb(0xA0, 0xA5, 0xB0));
-            Resources["TextPrimary"] = new SolidColorBrush(Color.FromRgb(0x1A, 0x1D, 0x29));
-            Resources["TextSecondary"] = new SolidColorBrush(Color.FromRgb(0x6B, 0x70, 0x80));
-            Resources["SidebarBg"] = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF));
+            Application.Current.Resources["BgDark"] = new SolidColorBrush(Color.FromRgb(0xF5, 0xF6, 0xFA));
+            Application.Current.Resources["BgCard"] = new SolidColorBrush(Colors.White);
+            Application.Current.Resources["BgCardHover"] = new SolidColorBrush(Color.FromRgb(0xEC, 0xED, 0xF2));
+            Application.Current.Resources["BgInput"] = new SolidColorBrush(Color.FromRgb(0xF0, 0xF1, 0xF5));
+            Application.Current.Resources["BgChip"] = new SolidColorBrush(Color.FromRgb(0xE2, 0xE5, 0xEC));
+            Application.Current.Resources["BorderColor"] = new SolidColorBrush(Color.FromRgb(0xDD, 0xE0, 0xE6));
+            Application.Current.Resources["TextMuted"] = new SolidColorBrush(Color.FromRgb(0xA0, 0xA5, 0xB0));
+            Application.Current.Resources["TextPrimary"] = new SolidColorBrush(Color.FromRgb(0x1A, 0x1D, 0x29));
+            Application.Current.Resources["TextSecondary"] = new SolidColorBrush(Color.FromRgb(0x6B, 0x70, 0x80));
+            Application.Current.Resources["SidebarBg"] = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF));
 
             LightModeButton.Tag = "Selected";
             DarkModeButton.Tag = null;
@@ -286,8 +464,8 @@ namespace DnsChanger
 
 
             var gradient = (LinearGradientBrush)clickedSwatch.Background;
-            Resources["AccentBlue"] = new SolidColorBrush(gradient.GradientStops[0].Color);
-            Resources["AccentGradient"] = gradient.Clone();
+            Application.Current.Resources["AccentBlue"] = new SolidColorBrush(gradient.GradientStops[0].Color);
+            Application.Current.Resources["AccentGradient"] = gradient.Clone();
 
             AccentSwatchBluePurple.Tag = null;
             AccentSwatchGreen.Tag = null;
@@ -302,8 +480,6 @@ namespace DnsChanger
             settings.AccentName = clickedSwatch.Name;
             settings.Save();
         }
-        private static Color Darken(Color c, double factor) =>
-            Color.FromRgb((byte)(c.R * factor), (byte)(c.G * factor), (byte)(c.B * factor));
         private void Language_Click(object sender, RoutedEventArgs e)
         {
             if (sender is not Button clickedLang) return;
@@ -312,7 +488,7 @@ namespace DnsChanger
             LangEnButton.Tag = null;
             clickedLang.Tag = "Selected";
 
-            MessageBox.Show("ترجمه‌ی کامل رابط کاربری رو قدم بعد با هم پیاده می‌کنیم.");
+            CustomDialog.ShowInfo("ترجمه‌ی کامل رابط کاربری رو قدم بعد با هم پیاده می‌کنیم.");
         }
         #endregion
     }
