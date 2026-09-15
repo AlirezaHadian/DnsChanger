@@ -11,5 +11,7 @@ namespace DnsChanger.Models
         public string Phase { get; set; }
         public double CurrentMbps { get; set; }
         public double PercentComplete { get; set; }
+        public long? PingMs { get; set; }
+        public string DataCenter { get; set; }
     }
 }

@@ -11,6 +11,7 @@ using System.Collections.ObjectModel;
 using System.Net;
 using DnsChanger.Repository;
 using System.Net.NetworkInformation;
+using System.Windows.Media.Animation;
 
 namespace DnsChanger
 {
@@ -23,7 +24,9 @@ namespace DnsChanger
         private readonly IPingService _pingService;
         private readonly ISpeedTestService _speedTestService;
         private readonly ObservableCollection<CustomDnsEntry> _customDnsEntries = new();
+        private readonly List<double> _speedChartValues = new();
         private DispatcherTimer _messageTimer;
+        private Storyboard _spinnerStoryboard;
         public MainWindow(IDnsService dnsService, ICustomDnsRepository customDnsRepository, INetworkDiagnosticsService diagnosticsService,
             IActivityLogRepository activityLog, IPingService pingService, ISpeedTestService speedTestService)
         {
@@ -239,33 +242,6 @@ namespace DnsChanger
         }
         #endregion
         #region SpeedTest
-        //private async void StartSpeedTestButton_Click(object sender, RoutedEventArgs e)
-        //{
-        //    StartSpeedTestButton.IsEnabled = false;
-        //    DownloadSpeedText.Text = "—";
-        //    UploadSpeedText.Text = "—";
-        //    DownloadSpeedMBText.Text = "— MB/s";
-        //    UploadSpeedMBText.Text = "— MB/s";
-        //    PingResultText.Text = "—";
-        //    DataCenterText.Text = "—";
-
-        //    var progress = new Progress<string>(status => SpeedTestStatusText.Text = status);
-        //    var result = await _speedTestService.RunTestAsync(progress);
-
-        //    DownloadSpeedText.Text = result.DownloadMbps.ToString("0.0");
-        //    UploadSpeedText.Text = result.UploadMbps.ToString("0.0");
-        //    DownloadSpeedMBText.Text = $"{(result.DownloadMbps / 8):0.0} MB/s";
-        //    UploadSpeedMBText.Text = $"{(result.UploadMbps / 8):0.0} MB/s";
-        //    PingResultText.Text = result.PingMs.ToString();
-        //    DataCenterText.Text = result.DataCenter;
-
-        //    _activityLog.Add("تست سرعت اجرا شد",
-        //$"دانلود: {result.DownloadMbps} Mbps, آپلود: {result.UploadMbps} Mbps, پینگ: {result.PingMs}ms");
-        //    LoadHistory();
-
-        //    StartSpeedTestButton.IsEnabled = true;
-        //}
-
         //New: check this
         private async void StartSpeedTestButton_Click(object sender, RoutedEventArgs e)
         {
@@ -275,13 +251,31 @@ namespace DnsChanger
             DownloadSpeedMBText.Text = "— MB/s";
             UploadSpeedMBText.Text = "— MB/s";
             PingResultText.Text = "—";
+            JitterResultText.Text = "—";
             DataCenterText.Text = "—";
+            ClearSpeedChart();
+            StartIndeterminateSpinner();
 
+            bool spinnerStopped = false;
             var progress = new Progress<SpeedTestProgress>(p =>
             {
                 SpeedTestStatusText.Text = p.Phase;
-                SpeedTestLiveNumber.Text = p.CurrentMbps.ToString("0.0");
-                UpdateProgressRing(p.PercentComplete);
+
+                if (p.CurrentMbps > 0)
+                {
+                    if (!spinnerStopped)
+                    {
+                        StopIndeterminateSpinner();
+                        spinnerStopped = true;
+                    }
+                    SpeedTestLiveNumber.Text = p.CurrentMbps.ToString("0.0");
+                    UpdateProgressRing(p.PercentComplete);
+                    AddSpeedChartPoint(p.CurrentMbps);
+                }
+
+                // این دوتا زودتر از بقیه آماده میشن، همون لحظه نشونشون بده
+                if (p.PingMs.HasValue) PingResultText.Text = p.PingMs.Value.ToString();
+                if (!string.IsNullOrEmpty(p.DataCenter)) DataCenterText.Text = p.DataCenter;
             });
 
             var result = await _speedTestService.RunTestAsync(progress);
@@ -291,6 +285,7 @@ namespace DnsChanger
             DownloadSpeedMBText.Text = $"{(result.DownloadMbps / 8):0.0} MB/s";
             UploadSpeedMBText.Text = $"{(result.UploadMbps / 8):0.0} MB/s";
             PingResultText.Text = result.PingMs.ToString();
+            JitterResultText.Text = result.JitterMs.ToString();
             DataCenterText.Text = result.DataCenter;
 
             SpeedTestLiveNumber.Text = "0.0";
@@ -298,19 +293,69 @@ namespace DnsChanger
             UpdateProgressRing(0);
 
             _activityLog.Add("تست سرعت اجرا شد",
-                $"دانلود: {result.DownloadMbps} Mbps, آپلود: {result.UploadMbps} Mbps, پینگ: {result.PingMs}ms");
+                $"دانلود: {result.DownloadMbps} Mbps, آپلود: {result.UploadMbps} Mbps, پینگ: {result.PingMs}ms, جیتر: {result.JitterMs}ms");
             LoadHistory();
 
             StartSpeedTestButton.IsEnabled = true;
         }
-        private void UpdateProgressRing(double percent) // and check this
+
+        private void UpdateProgressRing(double percent)
         {
-            const double radius = 90;
+            const double radius = 95; // (200 - 10) / 2 — چون Width=200 و StrokeThickness=10
             const double thickness = 10;
             double circumferenceInUnits = (2 * Math.PI * radius) / thickness;
             double dash = Math.Max(0.001, percent / 100.0 * circumferenceInUnits);
             double gap = Math.Max(0.001, circumferenceInUnits - dash);
             SpeedTestProgressRing.StrokeDashArray = new System.Windows.Media.DoubleCollection { dash, gap };
+        }
+
+        private void AddSpeedChartPoint(double mbps)
+        {
+            _speedChartValues.Add(mbps);
+            if (_speedChartValues.Count > 50) _speedChartValues.RemoveAt(0);
+
+            double width = SpeedChartCanvas.ActualWidth;
+            double height = SpeedChartCanvas.ActualHeight;
+            if (width <= 0 || height <= 0 || _speedChartValues.Count < 2) return;
+
+            double maxValue = Math.Max(1, _speedChartValues.Max());
+            double stepX = width / (_speedChartValues.Count - 1);
+
+            var points = new System.Windows.Media.PointCollection();
+            for (int i = 0; i < _speedChartValues.Count; i++)
+            {
+                double x = i * stepX;
+                double y = height - (_speedChartValues[i] / maxValue * height * 0.9);
+                points.Add(new System.Windows.Point(x, y));
+            }
+            SpeedChartLine.Points = points;
+        }
+
+        private void ClearSpeedChart()
+        {
+            _speedChartValues.Clear();
+            SpeedChartLine.Points = new System.Windows.Media.PointCollection();
+        }
+
+        private void StartIndeterminateSpinner()
+        {
+            SpeedTestProgressRing.StrokeDashArray = new System.Windows.Media.DoubleCollection { 2.2, 7 };
+
+            var animation = new DoubleAnimation(0, 360, TimeSpan.FromSeconds(1.2))
+            {
+                RepeatBehavior = RepeatBehavior.Forever
+            };
+
+            _spinnerStoryboard = new Storyboard();
+            Storyboard.SetTarget(animation, SpeedTestProgressRing);
+            Storyboard.SetTargetProperty(animation, new PropertyPath("(Ellipse.RenderTransform).(RotateTransform.Angle)"));
+            _spinnerStoryboard.Children.Add(animation);
+            _spinnerStoryboard.Begin();
+        }
+        private void StopIndeterminateSpinner()
+        {
+            _spinnerStoryboard?.Stop();
+            SpeedTestProgressRing.RenderTransform = new RotateTransform(-90);
         }
         #endregion
         #region Troubleshoot

@@ -12,6 +12,7 @@ namespace DnsChanger.Models
         public double DownloadMbps { get; set; }
         public double UploadMbps { get; set; }
         public long PingMs { get; set; }
+        public long JitterMs { get; set; }
         public string DataCenter { get; set; }
     }
 }

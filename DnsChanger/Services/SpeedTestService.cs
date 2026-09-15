@@ -1,13 +1,6 @@
 ﻿using DnsChanger.Models;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
 using System.Net.Http;
-using System.Runtime.CompilerServices;
-using System.Security.Cryptography;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace DnsChanger.Services
 {
@@ -24,37 +17,60 @@ namespace DnsChanger.Services
             var result = new SpeedTestResult();
 
             progress?.Report(new SpeedTestProgress { Phase = "در حال تست پینگ...", CurrentMbps = 0, PercentComplete = 0 });
-            result.PingMs = await _pingService.PingAsync("1.1.1.1") ?? 0;
+            var (avgPing, jitter) = await MeasureLatencyAsync().ConfigureAwait(false);
+            result.PingMs = avgPing;
+            result.JitterMs = jitter;
 
             progress?.Report(new SpeedTestProgress { Phase = "در حال شناسایی دیتاسنتر...", CurrentMbps = 0, PercentComplete = 0 });
-            result.DataCenter = await GetDataCenterAsync();
 
-            result.DownloadMbps = await TestDownloadAsync(progress);
-            result.UploadMbps = await TestUploadAsync(progress);
+            result.DataCenter = await GetDataCenterAsync().ConfigureAwait(false);
+            progress?.Report(new SpeedTestProgress { Phase = "آماده‌ی تست سرعت...", DataCenter = result.DataCenter });
+
+            result.DownloadMbps = await TestDownloadAsync(progress).ConfigureAwait(false);
+            result.UploadMbps = await TestUploadAsync(progress).ConfigureAwait(false);
 
             progress?.Report(new SpeedTestProgress { Phase = "تمام شد", CurrentMbps = 0, PercentComplete = 100 });
             return result;
+        }
+        private async Task<(long avgPing, long jitter)> MeasureLatencyAsync()
+        {
+            var samples = new List<long>();
+            for (int i = 0; i < 6; i++)
+            {
+                var ms = await _pingService.PingAsync("1.1.1.1").ConfigureAwait(false);
+                if (ms.HasValue) samples.Add(ms.Value);
+                await Task.Delay(100).ConfigureAwait(false);
+            }
+
+            if (samples.Count == 0) return (0, 0);
+            
+            long avg = (long)samples.Average();
+            long jitterSum = 0;
+            for (int i = 1; i < samples.Count; i++)
+                jitterSum += Math.Abs(samples[i] - samples[i - 1]);
+            long jitter = samples.Count > 1 ? jitterSum / (samples.Count - 1) : 0;
+
+            return (avg, jitter);
         }
         private async Task<string> GetDataCenterAsync()
         {
             try
             {
-                var trace = await _http.GetStringAsync("https://speed.cloudflare.com/cdn-cgi/trace");
+                var trace = await _http.GetStringAsync("https://speed.cloudflare.com/cdn-cgi/trace").ConfigureAwait(false);
                 var line = trace.Split('\n').FirstOrDefault(l => l.StartsWith("colo="));
                 return line != null ? line.Substring(5) : "نامشخص";
             }
             catch { return "نامشخص"; }
         }
-        //Check this method
         private async Task<double> TestDownloadAsync(IProgress<SpeedTestProgress> progress)
         {
             try
             {
-                const long totalBytes = 25_000_000; // 25 MB
+                const long totalBytes = 25_000_000;
                 using var response = await _http.GetAsync(
-    $"https://speed.cloudflare.com/__down?bytes={totalBytes}",
-    HttpCompletionOption.ResponseHeadersRead);
-                using var stream = await response.Content.ReadAsStreamAsync();
+                    $"https://speed.cloudflare.com/__down?bytes={totalBytes}",
+                    HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+                using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
 
                 var buffer = new byte[65536];
                 long totalRead = 0;
@@ -62,7 +78,7 @@ namespace DnsChanger.Services
                 double lastReportSeconds = 0;
 
                 int bytesRead;
-                while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false)) > 0)
                 {
                     totalRead += bytesRead;
                     double elapsed = sw.Elapsed.TotalSeconds;
@@ -103,7 +119,7 @@ namespace DnsChanger.Services
                     random.NextBytes(chunk);
 
                     var chunkSw = Stopwatch.StartNew();
-                    await _http.PostAsync("https://speed.cloudflare.com/__up", new ByteArrayContent(chunk));
+                    await _http.PostAsync("https://speed.cloudflare.com/__up", new ByteArrayContent(chunk)).ConfigureAwait(false);
                     chunkSw.Stop();
 
                     totalSent += chunkSize;

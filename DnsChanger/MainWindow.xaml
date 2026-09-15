@@ -471,7 +471,7 @@
                                                             </Viewbox>
                                                         </Border>
                                                         <Border Grid.Column="1" Background="{DynamicResource BgChip}" CornerRadius="8" Padding="6,3" VerticalAlignment="Top">
-                                                            <TextBlock Text="— ms" FontSize="9.5" Foreground="{DynamicResource TextSecondary}"/>
+                                                            <TextBlock Text="{Binding PingText}" FontSize="9.5" Foreground="{DynamicResource TextSecondary}"/>
                                                         </Border>
                                                     </Grid>
                                                     <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"
@@ -586,84 +586,122 @@
                 <!--  ///////////////////// صفحه تست سرعت ///////////////////// -->
                 <StackPanel x:Name="SpeedTestPagePanel" Visibility="Collapsed">
                     <TextBlock Text="تست سرعت" Style="{StaticResource PageTitleStyle}"/>
-                    <TextBlock Text="تست دانلود، آپلود، پینگ و دیتاسنتر" Style="{StaticResource PageSubtitleStyle}" Margin="0,3,0,20"/>
+                    <TextBlock Text="تست دانلود، آپلود، پینگ و دیتاسنتر" Style="{StaticResource PageSubtitleStyle}" Margin="0,3,0,14"/>
 
-                    <Border Style="{StaticResource DnsCardStyle}" Cursor="Arrow" Padding="30" HorizontalAlignment="Stretch">
+                    <Border Style="{StaticResource DnsCardStyle}" Cursor="Arrow" Padding="20" HorizontalAlignment="Stretch" Margin="0,0,0,12">
                         <StackPanel HorizontalAlignment="Center">
 
                             <!--  دایره‌ی گیج زنده  -->
-                            <Grid Width="200" Height="200" Margin="0,0,0,22">
-                                <Ellipse Stroke="{DynamicResource BorderColor}" StrokeThickness="10"/>
-                                <Ellipse x:Name="SpeedTestProgressRing" Stroke="{DynamicResource AccentGradient}" StrokeThickness="10"
+                            <Grid Width="170" Height="170" Margin="0,0,0,16">
+                                <Ellipse Stroke="{DynamicResource BorderColor}" StrokeThickness="9"/>
+                                <Ellipse x:Name="SpeedTestProgressRing" Stroke="{DynamicResource AccentGradient}" StrokeThickness="9"
                                          StrokeDashArray="0,1000" StrokeDashCap="Round" RenderTransformOrigin="0.5,0.5">
                                     <Ellipse.RenderTransform>
                                         <RotateTransform Angle="-90"/>
                                     </Ellipse.RenderTransform>
                                 </Ellipse>
                                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                    <TextBlock x:Name="SpeedTestLiveNumber" Text="0.0" FontSize="36" FontWeight="Bold"
+                                    <TextBlock x:Name="SpeedTestLiveNumber" Text="0.0" FontSize="30" FontWeight="Bold"
                                                Foreground="{DynamicResource TextPrimary}" HorizontalAlignment="Center"/>
-                                    <TextBlock Text="Mbps" FontSize="11" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center"/>
-                                    <TextBlock x:Name="SpeedTestStatusText" Text="آماده" FontSize="11" Foreground="{DynamicResource TextMuted}"
-                                               HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                                    <TextBlock Text="Mbps" FontSize="10.5" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center"/>
+                                    <TextBlock x:Name="SpeedTestStatusText" Text="آماده" FontSize="10.5" Foreground="{DynamicResource TextMuted}"
+                                               HorizontalAlignment="Center" Margin="0,6,0,0"/>
                                 </StackPanel>
                             </Grid>
 
-                            <!--  دکمه‌ی شروع — بیرون از دایره  -->
-                            <Button x:Name="StartSpeedTestButton" Style="{StaticResource ApplyButtonStyle}" Padding="22,10"
-                                    Margin="0,0,0,28" Click="StartSpeedTestButton_Click">
+                            <!--  دکمه‌ی شروع — بزرگ‌تر، بیرون از دایره، با سایه  -->
+                            <Button x:Name="StartSpeedTestButton" Style="{StaticResource ApplyButtonStyle}" Padding="30,11"
+                                    Click="StartSpeedTestButton_Click">
+                                <Button.Effect>
+                                    <DropShadowEffect BlurRadius="18" ShadowDepth="4" Opacity="0.35" Color="#5B8CFF"/>
+                                </Button.Effect>
                                 <StackPanel Orientation="Horizontal">
-                                    <Viewbox Width="12" Height="12" Margin="8,0,0,0" FlowDirection="LeftToRight">
-                                        <Polygon Points="0,0 0,16 14,8" Fill="White"/>
+                                    <Viewbox Width="13" Height="13" Margin="9,0,0,0" FlowDirection="LeftToRight">
+                                        <Polygon Points="0,0 0,17 15,8.5" Fill="White"/>
                                     </Viewbox>
-                                    <TextBlock Text="شروع تست" FontSize="13"/>
+                                    <TextBlock Text="شروع تست سرعت" FontSize="13.5" FontWeight="SemiBold"/>
                                 </StackPanel>
                             </Button>
+                        </StackPanel>
+                    </Border>
 
-                            <!--  نتایج  -->
-                            <UniformGrid Columns="4" Width="560">
-                                <StackPanel HorizontalAlignment="Center" Margin="6">
-                                    <Viewbox Width="18" Height="18">
-                                        <Canvas Width="24" Height="24">
-                                            <Line X1="12" Y1="4" X2="12" Y2="17" Stroke="{DynamicResource AccentBlue}" StrokeThickness="2" StrokeStartLineCap="Round"/>
-                                            <Path Data="M6 12 L12 18 L18 12" Stroke="{DynamicResource AccentBlue}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/>
-                                        </Canvas>
-                                    </Viewbox>
-                                    <TextBlock x:Name="DownloadSpeedText" Text="—" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" HorizontalAlignment="Center" Margin="0,6,0,0"/>
-                                    <TextBlock Text="Mbps دانلود" FontSize="10.5" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center"/>
-                                    <TextBlock x:Name="DownloadSpeedMBText" Text="— MB/s" FontSize="9.5" Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Center" Margin="0,2,0,0"/>
-                                </StackPanel>
-                                <StackPanel HorizontalAlignment="Center" Margin="6">
-                                    <Viewbox Width="18" Height="18">
-                                        <Canvas Width="24" Height="24">
-                                            <Line X1="12" Y1="20" X2="12" Y2="7" Stroke="{DynamicResource AccentPurple}" StrokeThickness="2" StrokeStartLineCap="Round"/>
-                                            <Path Data="M6 12 L12 6 L18 12" Stroke="{DynamicResource AccentPurple}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/>
-                                        </Canvas>
-                                    </Viewbox>
-                                    <TextBlock x:Name="UploadSpeedText" Text="—" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" HorizontalAlignment="Center" Margin="0,6,0,0"/>
-                                    <TextBlock Text="Mbps آپلود" FontSize="10.5" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center"/>
-                                    <TextBlock x:Name="UploadSpeedMBText" Text="— MB/s" FontSize="9.5" Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Center" Margin="0,2,0,0"/>
-                                </StackPanel>
-                                <StackPanel HorizontalAlignment="Center" Margin="6">
-                                    <Viewbox Width="18" Height="18">
-                                        <Canvas Width="24" Height="24">
-                                            <Rectangle Width="4" Height="6" Canvas.Left="2" Canvas.Top="14" Fill="{DynamicResource Success}" RadiusX="1" RadiusY="1"/>
-                                            <Rectangle Width="4" Height="10" Canvas.Left="10" Canvas.Top="10" Fill="{DynamicResource Success}" RadiusX="1" RadiusY="1"/>
-                                            <Rectangle Width="4" Height="14" Canvas.Left="18" Canvas.Top="6" Fill="{DynamicResource Success}" RadiusX="1" RadiusY="1"/>
-                                        </Canvas>
-                                    </Viewbox>
-                                    <TextBlock x:Name="PingResultText" Text="—" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" HorizontalAlignment="Center" Margin="0,6,0,0"/>
-                                    <TextBlock Text="ms پینگ" FontSize="10.5" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center"/>
-                                </StackPanel>
-                                <StackPanel HorizontalAlignment="Center" Margin="6">
-                                    <Viewbox Width="18" Height="18">
-                                        <Path Data="M15 17a1 1 0 101 1 1 1 0 00-1-1zm-6 0H6a1 1 0 000 2h3a1 1 0 000-2zm9 0a1 1 0 101 1 1 1 0 00-1-1zm-3-6a1 1 0 101 1 1 1 0 00-1-1zm-6 0H6a1 1 0 000 2h3a1 1 0 000-2zm9-6a1 1 0 101 1 1 1 0 00-1-1zm0 6a1 1 0 101 1 1 1 0 00-1-1zm4-6a3 3 0 00-3-3H5a3 3 0 00-3 3v2a3 3 0 00.78 2A3 3 0 002 11v2a3 3 0 00.78 2A3 3 0 002 17v2a3 3 0 003 3h14a3 3 0 003-3v-2a3 3 0 00-.78-2 3 3 0 00.78-2v-2a3 3 0 00-.78-2A3 3 0 0022 7zm-2 14a1 1 0 01-1 1H5a1 1 0 01-1-1v-2a1 1 0 011-1h14a1 1 0 011 1zm0-6a1 1 0 01-1 1H5a1 1 0 01-1-1v-2a1 1 0 011-1h14a1 1 0 011 1zm0-6a1 1 0 01-1 1H5a1 1 0 01-1-1V5a1 1 0 011-1h14a1 1 0 011 1zm-5-2a1 1 0 101 1 1 1 0 00-1-1zM9 5H6a1 1 0 000 2h3a1 1 0 000-2z"
-                                              Fill="{DynamicResource TextSecondary}"/>
-                                    </Viewbox>
-                                    <TextBlock x:Name="DataCenterText" Text="—" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" HorizontalAlignment="Center" Margin="0,10,0,0" TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Text="دیتاسنتر" FontSize="10.5" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center"/>
-                                </StackPanel>
-                            </UniformGrid>
+                    <!--  کارت‌های آمار — هرکدوم پس‌زمینه و حاشیه‌ی مستقل  -->
+                    <UniformGrid Columns="5" Margin="0,0,0,12">
+                        <Border Background="{DynamicResource BgCard}" CornerRadius="12" BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="1" Padding="10" Margin="0,0,10,0" Cursor="Arrow">
+                            <StackPanel HorizontalAlignment="Center">
+                                <Viewbox Width="17" Height="17">
+                                    <Canvas Width="24" Height="24">
+                                        <Line X1="12" Y1="4" X2="12" Y2="17" Stroke="{DynamicResource AccentBlue}" StrokeThickness="2" StrokeStartLineCap="Round"/>
+                                        <Path Data="M6 12 L12 18 L18 12" Stroke="{DynamicResource AccentBlue}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/>
+                                    </Canvas>
+                                </Viewbox>
+                                <TextBlock x:Name="DownloadSpeedText" Text="—" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                                <TextBlock Text="Mbps دانلود" FontSize="9.5" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center"/>
+                                <TextBlock x:Name="DownloadSpeedMBText" Text="— MB/s" FontSize="8.5" Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="{DynamicResource BgCard}" CornerRadius="12" BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="1" Padding="10" Margin="0,0,10,0" Cursor="Arrow">
+                            <StackPanel HorizontalAlignment="Center">
+                                <Viewbox Width="17" Height="17">
+                                    <Canvas Width="24" Height="24">
+                                        <Line X1="12" Y1="20" X2="12" Y2="7" Stroke="{DynamicResource AccentPurple}" StrokeThickness="2" StrokeStartLineCap="Round"/>
+                                        <Path Data="M6 12 L12 6 L18 12" Stroke="{DynamicResource AccentPurple}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" Fill="Transparent"/>
+                                    </Canvas>
+                                </Viewbox>
+                                <TextBlock x:Name="UploadSpeedText" Text="—" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                                <TextBlock Text="Mbps آپلود" FontSize="9.5" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center"/>
+                                <TextBlock x:Name="UploadSpeedMBText" Text="— MB/s" FontSize="8.5" Foreground="{DynamicResource TextMuted}" HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="{DynamicResource BgCard}" CornerRadius="12" BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="1" Padding="10" Margin="0,0,10,0" Cursor="Arrow">
+                            <StackPanel HorizontalAlignment="Center">
+                                <Viewbox Width="17" Height="17">
+                                    <Canvas Width="24" Height="24">
+                                        <Rectangle Width="4" Height="6" Canvas.Left="2" Canvas.Top="14" Fill="{DynamicResource Success}" RadiusX="1" RadiusY="1"/>
+                                        <Rectangle Width="4" Height="10" Canvas.Left="10" Canvas.Top="10" Fill="{DynamicResource Success}" RadiusX="1" RadiusY="1"/>
+                                        <Rectangle Width="4" Height="14" Canvas.Left="18" Canvas.Top="6" Fill="{DynamicResource Success}" RadiusX="1" RadiusY="1"/>
+                                    </Canvas>
+                                </Viewbox>
+                                <TextBlock x:Name="PingResultText" Text="—" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                                <TextBlock Text="ms پینگ" FontSize="9.5" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="{DynamicResource BgCard}" CornerRadius="12" BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="1" Padding="10" Margin="0,0,10,0" Cursor="Arrow">
+                            <StackPanel HorizontalAlignment="Center">
+                                <Viewbox Width="17" Height="17">
+                                    <Canvas Width="24" Height="24">
+                                        <Polyline Points="2,12 7,6 11,16 15,4 19,14 22,10" Stroke="{DynamicResource Danger}" StrokeThickness="2"
+                                                  StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Fill="Transparent"/>
+                                    </Canvas>
+                                </Viewbox>
+                                <TextBlock x:Name="JitterResultText" Text="—" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                                <TextBlock Text="ms جیتر" FontSize="9.5" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="{DynamicResource BgCard}" CornerRadius="12" BorderBrush="{DynamicResource BorderColor}"
+                                BorderThickness="1" Padding="10" Cursor="Arrow">
+                            <StackPanel HorizontalAlignment="Center">
+                                <Viewbox Width="17" Height="17">
+                                    <Path Data="M15 17a1 1 0 101 1 1 1 0 00-1-1zm-6 0H6a1 1 0 000 2h3a1 1 0 000-2zm9 0a1 1 0 101 1 1 1 0 00-1-1zm-3-6a1 1 0 101 1 1 1 0 00-1-1zm-6 0H6a1 1 0 000 2h3a1 1 0 000-2zm9-6a1 1 0 101 1 1 1 0 00-1-1zm0 6a1 1 0 101 1 1 1 0 00-1-1zm4-6a3 3 0 00-3-3H5a3 3 0 00-3 3v2a3 3 0 00.78 2A3 3 0 002 11v2a3 3 0 00.78 2A3 3 0 002 17v2a3 3 0 003 3h14a3 3 0 003-3v-2a3 3 0 00-.78-2 3 3 0 00.78-2v-2a3 3 0 00-.78-2A3 3 0 0022 7zm-2 14a1 1 0 01-1 1H5a1 1 0 01-1-1v-2a1 1 0 011-1h14a1 1 0 011 1zm0-6a1 1 0 01-1 1H5a1 1 0 01-1-1v-2a1 1 0 011-1h14a1 1 0 011 1zm0-6a1 1 0 01-1 1H5a1 1 0 01-1-1V5a1 1 0 011-1h14a1 1 0 011 1zm-5-2a1 1 0 101 1 1 1 0 00-1-1zM9 5H6a1 1 0 000 2h3a1 1 0 000-2z"
+                                          Fill="{DynamicResource TextSecondary}"/>
+                                </Viewbox>
+                                <TextBlock x:Name="DataCenterText" Text="—" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" HorizontalAlignment="Center" Margin="0,7,0,0" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="دیتاسنتر" FontSize="9.5" Foreground="{DynamicResource TextSecondary}" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                    </UniformGrid>
+
+                    <!--  نمودار نوسانات زنده  -->
+                    <Border Background="{DynamicResource BgCard}" CornerRadius="12" BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" Padding="14" Cursor="Arrow">
+                        <StackPanel>
+                            <TextBlock Text="نوسانات زنده‌ی سرعت" FontSize="12.5" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" Margin="0,0,0,8"/>
+                            <Canvas x:Name="SpeedChartCanvas" Height="85" Background="Transparent" ClipToBounds="True">
+                                <Polyline x:Name="SpeedChartLine" Stroke="{DynamicResource AccentGradient}" StrokeThickness="2.5" StrokeLineJoin="Round"/>
+                            </Canvas>
                         </StackPanel>
                     </Border>
                 </StackPanel>
