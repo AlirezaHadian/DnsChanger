@@ -12,6 +12,7 @@ using System.Net;
 using DnsChanger.Repository;
 using System.Net.NetworkInformation;
 using System.Windows.Media.Animation;
+using Application = System.Windows.Application;
 
 namespace DnsChanger
 {
@@ -23,12 +24,16 @@ namespace DnsChanger
         private readonly IActivityLogRepository _activityLog;
         private readonly IPingService _pingService;
         private readonly ISpeedTestService _speedTestService;
+        private readonly IWifiService _wifiService;
         private readonly ObservableCollection<CustomDnsEntry> _customDnsEntries = new();
         private readonly List<double> _speedChartValues = new();
         private DispatcherTimer _messageTimer;
         private Storyboard _spinnerStoryboard;
+        private System.Windows.Forms.NotifyIcon _trayIcon;
+        private bool _isExiting = false;
+
         public MainWindow(IDnsService dnsService, ICustomDnsRepository customDnsRepository, INetworkDiagnosticsService diagnosticsService,
-            IActivityLogRepository activityLog, IPingService pingService, ISpeedTestService speedTestService)
+            IActivityLogRepository activityLog, IPingService pingService, ISpeedTestService speedTestService, IWifiService wifiService)
         {
             InitializeComponent();
             _dnsService = dnsService;
@@ -37,6 +42,7 @@ namespace DnsChanger
             _activityLog = activityLog;
             _pingService = pingService;
             _speedTestService = speedTestService;
+            _wifiService = wifiService;
 
             CustomDnsItemsControl.ItemsSource = _customDnsEntries;
             LoadCustomDnsEntries();
@@ -49,6 +55,8 @@ namespace DnsChanger
             _messageTimer = new DispatcherTimer();
             _messageTimer.Interval = TimeSpan.FromSeconds(5);
             _messageTimer.Tick += MessageTimer_Tick;
+
+            InitializeTrayIcon();
         }
         public static void AdminPermissionCheck()
         {
@@ -79,6 +87,7 @@ namespace DnsChanger
         {
             NetworkChange.NetworkAvailabilityChanged -= NetworkChange_NetworkAvailabilityChanged;
             NetworkChange.NetworkAddressChanged -= NetworkChange_NetworkAddressChanged;
+            _trayIcon?.Dispose();
             base.OnClosed(e);
         }
         #region DNS 
@@ -412,9 +421,58 @@ namespace DnsChanger
         }
         #endregion
         #region Wifi
-        private void ConnectWifi_Click(object sender, RoutedEventArgs e)
+        private void LoadWifiNetworks()
         {
-            CustomDialog.ShowInfo("اسکن و اتصال Wi-Fi واقعی رو بعداً با هم می‌سازیم.");
+            WifiNetworksItemsControl.ItemsSource = _wifiService.GetAvailableNetworks();
+        }
+        private void RefreshWifiButton_Click(object sender, RoutedEventArgs e)
+        {
+            LoadWifiNetworks();
+        }
+        private async void ConnectWifi_Click(object sender, RoutedEventArgs e)
+        {
+            if(sender is not Button button || button.Tag is not WifiNetworkInfo network) return;
+
+            button.IsEnabled = false;
+            var originalContent = button.Content;
+            button.Content = "در حال اتصال...";
+
+            bool success = false;
+
+            if (_wifiService.HasSavedProfile(network.Name)) success = await _wifiService.ConnectToSavedProfileAsync(network.Name);
+
+            if(!success)
+            {
+                string password = null;
+                if (network.IsSecured)
+                {
+                    password = CustomDialog.PromptPassword(network.Name);
+                    if(password == null)
+                    {
+                        button.IsEnabled = true;
+                        button.Content = originalContent;
+                        return;
+                    }
+                }
+
+                success = await _wifiService.ConnectWithPasswordAsync(network.Name, password, network.IsSecured);
+            }
+
+            button.IsEnabled = true;
+            button.Content = originalContent;
+
+            if (success)
+            {
+                CustomDialog.ShowInfo($"به {network.Name} متصل شدی.");
+                _activityLog.Add($"به Wi-Fi «{network.Name}» متصل شد");
+                LoadHistory();
+                LoadWifiNetworks();
+                RefreshConnectionStatus();
+            }
+            else
+            {
+                CustomDialog.ShowError($"اتصال به «{network.Name}» ناموفق بود — رمز رو چک کن.");
+            }
         }
         #endregion
         #region History
@@ -448,7 +506,10 @@ namespace DnsChanger
                 case "History": HistoryPagePanel.Visibility = Visibility.Visible; break;
                 case "SpeedTest": SpeedTestPagePanel.Visibility = Visibility.Visible; break;
                 case "Troubleshoot": TroubleshootPagePanel.Visibility = Visibility.Visible; break;
-                case "Wifi": WifiPagePanel.Visibility = Visibility.Visible; break;
+                case "Wifi":
+                    WifiPagePanel.Visibility = Visibility.Visible;
+                    LoadWifiNetworks();
+                    break;
                 case "Settings": SettingsPagePanel.Visibility = Visibility.Visible; break;
             }
 
@@ -534,6 +595,55 @@ namespace DnsChanger
             clickedLang.Tag = "Selected";
 
             CustomDialog.ShowInfo("ترجمه‌ی کامل رابط کاربری رو قدم بعد با هم پیاده می‌کنیم.");
+        }
+        #endregion
+        #region Windows Tray
+        private void InitializeTrayIcon()
+        {
+            _trayIcon = new System.Windows.Forms.NotifyIcon
+            {
+                Icon = System.Drawing.Icon.ExtractAssociatedIcon(
+                    System.Reflection.Assembly.GetExecutingAssembly().Location),
+                Visible = true,
+                Text = "DNS Changer"
+            };
+
+            var contextMenu = new System.Windows.Forms.ContextMenuStrip();
+            contextMenu.Items.Add("باز کردن", null, (s, e) => ShowFromTray());
+            contextMenu.Items.Add("خروج", null, (s, e) => ExitApplication());
+            _trayIcon.ContextMenuStrip = contextMenu;
+
+            _trayIcon.DoubleClick += (s, e) => ShowFromTray();
+        }
+
+        private void ShowFromTray()
+        {
+            Show();
+            WindowState = WindowState.Normal;
+            Activate();
+        }
+
+        private void ExitApplication()
+        {
+            _isExiting = true;
+            Application.Current.Shutdown();
+        }
+
+        protected override void OnStateChanged(EventArgs e)
+        {
+            if (WindowState == WindowState.Minimized)
+                Hide();
+            base.OnStateChanged(e);
+        }
+
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            if (!_isExiting)
+            {
+                e.Cancel = true;
+                Hide();
+            }
+            base.OnClosing(e);
         }
         #endregion
     }

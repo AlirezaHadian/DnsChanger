@@ -35,6 +35,7 @@ namespace DnsChanger
             services.AddSingleton<IActivityLogRepository, ActivityLogRepository>();
             services.AddSingleton<IPingService, PingService>();
             services.AddSingleton<ISpeedTestService, SpeedTestService>();
+            services.AddSingleton<IWifiService, WifiService>();
             services.AddTransient<MainWindow>();
         }
 

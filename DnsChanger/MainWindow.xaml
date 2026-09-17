@@ -13,6 +13,8 @@
 
     <Window.Resources>
 
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
         <!--  کارت عمومی  -->
         <Style x:Key="DnsCardStyle" TargetType="Border">
             <Setter Property="Background" Value="{DynamicResource BgCard}"/>
@@ -795,7 +797,7 @@
                             <TextBlock Text="شبکه‌های Wi-Fi در دسترس" Style="{StaticResource PageTitleStyle}"/>
                             <TextBlock Text="اتصال سریع بدون رفتن به تنظیمات ویندوز" Style="{StaticResource PageSubtitleStyle}" Margin="0,3,0,0"/>
                         </StackPanel>
-                        <Button Grid.Column="1" x:Name="RefreshWifiButton" Style="{StaticResource SecondaryButtonStyle}" Padding="12,7" VerticalAlignment="Center">
+                        <Button Grid.Column="1" x:Name="RefreshWifiButton" Style="{StaticResource SecondaryButtonStyle}" Padding="12,7" VerticalAlignment="Center" Click="RefreshWifiButton_Click">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="⟳" FontSize="13" Margin="8,0,0,0"/>
                                 <TextBlock Text="بروزرسانی" FontSize="12"/>
@@ -804,23 +806,91 @@
                     </Grid>
 
                     <ItemsControl x:Name="WifiNetworksItemsControl">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                                <Border Style="{StaticResource DnsCardStyle}" Margin="0,0,0,10" Cursor="Arrow">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="{Binding SignalIcon}" FontSize="18" VerticalAlignment="Center"/>
-                                        <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/>
-                                            <TextBlock Text="{Binding SecurityInfo}" FontSize="10.5" Foreground="{DynamicResource TextSecondary}" Margin="0,2,0,0"/>
+                                <Border Width="190" Style="{StaticResource DnsCardStyle}" Padding="14,12" Margin="0,0,12,12" Cursor="Arrow">
+                                    <StackPanel>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Orientation="Horizontal">
+                                                <Viewbox Width="16" Height="16">
+                                                    <Canvas Width="24" Height="24">
+                                                        <Rectangle Width="4" Height="6" Canvas.Left="2" Canvas.Top="14" RadiusX="1" RadiusY="1">
+                                                            <Rectangle.Style>
+                                                                <Style TargetType="Rectangle">
+                                                                    <Setter Property="Fill" Value="{DynamicResource BorderColor}"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Bar1Active}" Value="True">
+                                                                            <Setter Property="Fill" Value="{DynamicResource AccentBlue}"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Rectangle.Style>
+                                                        </Rectangle>
+                                                        <Rectangle Width="4" Height="10" Canvas.Left="10" Canvas.Top="10" RadiusX="1" RadiusY="1">
+                                                            <Rectangle.Style>
+                                                                <Style TargetType="Rectangle">
+                                                                    <Setter Property="Fill" Value="{DynamicResource BorderColor}"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Bar2Active}" Value="True">
+                                                                            <Setter Property="Fill" Value="{DynamicResource AccentBlue}"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Rectangle.Style>
+                                                        </Rectangle>
+                                                        <Rectangle Width="4" Height="14" Canvas.Left="18" Canvas.Top="6" RadiusX="1" RadiusY="1">
+                                                            <Rectangle.Style>
+                                                                <Style TargetType="Rectangle">
+                                                                    <Setter Property="Fill" Value="{DynamicResource BorderColor}"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding Bar3Active}" Value="True">
+                                                                            <Setter Property="Fill" Value="{DynamicResource AccentBlue}"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Rectangle.Style>
+                                                        </Rectangle>
+                                                    </Canvas>
+                                                </Viewbox>
+                                                <TextBlock Text="{Binding SignalPercent, StringFormat={}{0}%}" FontSize="9.5" Foreground="{DynamicResource TextSecondary}" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <Border Grid.Column="1" Background="{DynamicResource Success}" CornerRadius="7" Padding="7,2"
+                                                    Visibility="{Binding IsConnected, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="متصل" FontSize="8.5" FontWeight="SemiBold" Foreground="White"/>
+                                            </Border>
+                                        </Grid>
+
+                                        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"
+                                                   Margin="0,9,0,3" TextTrimming="CharacterEllipsis"/>
+
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,11">
+                                            <Ellipse Width="6" Height="6" VerticalAlignment="Center">
+                                                <Ellipse.Style>
+                                                    <Style TargetType="Ellipse">
+                                                        <Setter Property="Fill" Value="{DynamicResource TextMuted}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSecured}" Value="True">
+                                                                <Setter Property="Fill" Value="{DynamicResource AccentBlue}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Ellipse.Style>
+                                            </Ellipse>
+                                            <TextBlock Text="{Binding SecurityInfo}" FontSize="10" Foreground="{DynamicResource TextSecondary}" Margin="6,0,0,0"/>
                                         </StackPanel>
-                                        <Button Grid.Column="2" Content="اتصال" Style="{StaticResource ApplyButtonStyle}" Padding="16,7"
+
+                                        <Button Content="اتصال" Style="{StaticResource ApplyButtonStyle}" Padding="0,7" FontSize="12"
                                                 Click="ConnectWifi_Click" Tag="{Binding}"/>
-                                    </Grid>
+                                    </StackPanel>
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>

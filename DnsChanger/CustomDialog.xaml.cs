@@ -89,5 +89,17 @@ namespace DnsChanger
             dialog.ShowDialog();
             return dialog.Result;
         }
+
+        public static string PromptPassword(string ssid)
+        {
+            var dialog = new CustomDialog($"اتصال به {ssid}","رمز عبور شبکه را وارد کن", DialogType.Question, true);
+            dialog.PasswordInput.Visibility = Visibility.Visible;
+            dialog.PrimaryButton.Content = "اتصال";
+            dialog.SecondaryButton.Content = "انصراف";
+            dialog.Owner = Application.Current.MainWindow;
+            
+            bool? result = dialog.ShowDialog();
+            return result == true ? dialog.PasswordInput.Password : null;
+        }
     }
 }

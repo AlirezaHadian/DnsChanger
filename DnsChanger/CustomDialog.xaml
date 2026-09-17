@@ -21,7 +21,7 @@
         <StackPanel>
 
             <!--  آیکون دایره‌ای — بسته به نوع پیام یکی از این ۴ حالت نمایش داده میشه  -->
-            <Border x:Name="IconCircle" Width="54" Height="54" CornerRadius="27" HorizontalAlignment="Center" Margin="0,0,0,18" FlowDirection="LeftToRight">
+            <Border x:Name="IconCircle" Width="54" Height="54" CornerRadius="27" HorizontalAlignment="Center" Margin="0,0,0,18">
                 <Grid>
                     <Viewbox Width="24" Height="24" Visibility="Collapsed" x:Name="SuccessIcon">
                         <Path Data="M5 13l4 4L19 7" Stroke="White" StrokeThickness="2.6"
@@ -48,7 +48,11 @@
                        HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,8"/>
 
             <TextBlock x:Name="MessageText" FontSize="13" Foreground="{DynamicResource TextSecondary}"
-                       HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,24"/>
+                       HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,18"/>
+
+            <PasswordBox x:Name="PasswordInput" Visibility="Collapsed" Margin="0,0,0,20" Padding="10,9"
+                         FontSize="13" Background="{DynamicResource BgInput}" Foreground="{DynamicResource TextPrimary}"
+                         BorderBrush="{DynamicResource BorderColor}" BorderThickness="1" CaretBrush="{DynamicResource AccentBlue}"/>
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                 <Button x:Name="SecondaryButton" Content="انصراف" Style="{StaticResource SecondaryButtonStyle}"
