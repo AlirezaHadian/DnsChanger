@@ -12,6 +12,9 @@ namespace DnsChanger.Models
         public double CurrentMbps { get; set; }
         public double PercentComplete { get; set; }
         public long? PingMs { get; set; }
+        public long? JitterMs { get; set; }
         public string DataCenter { get; set; }
+        public double? FinalDownloadMbps { get; set; }
+        public double? FinalUploadMbps { get; set; }
     }
 }

@@ -281,6 +281,18 @@ namespace DnsChanger
                     UpdateProgressRing(p.PercentComplete);
                     AddSpeedChartPoint(p.CurrentMbps);
                 }
+                if (!string.IsNullOrEmpty(p.DataCenter)) DataCenterText.Text = p.DataCenter;
+
+                if (p.FinalDownloadMbps.HasValue)
+                {
+                    DownloadSpeedText.Text = p.FinalDownloadMbps.Value.ToString("0.0");
+                    DownloadSpeedMBText.Text = $"{(p.FinalDownloadMbps.Value / 8):0.0} MB/s";
+                }
+                if (p.FinalUploadMbps.HasValue)
+                {
+                    UploadSpeedText.Text = p.FinalUploadMbps.Value.ToString("0.0");
+                    UploadSpeedMBText.Text = $"{(p.FinalUploadMbps.Value / 8):0.0} MB/s";
+                }
 
                 // این دوتا زودتر از بقیه آماده میشن، همون لحظه نشونشون بده
                 if (p.PingMs.HasValue) PingResultText.Text = p.PingMs.Value.ToString();
@@ -421,13 +433,13 @@ namespace DnsChanger
         }
         #endregion
         #region Wifi
-        private void LoadWifiNetworks()
+        private async Task LoadWifiNetworksAsync()
         {
-            WifiNetworksItemsControl.ItemsSource = _wifiService.GetAvailableNetworks();
+            WifiNetworksItemsControl.ItemsSource = await _wifiService.GetAvailableNetworks();
         }
-        private void RefreshWifiButton_Click(object sender, RoutedEventArgs e)
+        private async void RefreshWifiButton_Click(object sender, RoutedEventArgs e)
         {
-            LoadWifiNetworks();
+            await LoadWifiNetworksAsync();
         }
         private async void ConnectWifi_Click(object sender, RoutedEventArgs e)
         {
@@ -439,7 +451,7 @@ namespace DnsChanger
 
             bool success = false;
 
-            if (_wifiService.HasSavedProfile(network.Name)) success = await _wifiService.ConnectToSavedProfileAsync(network.Name);
+            if (await _wifiService.HasSavedProfileAsync(network.Name)) success = await _wifiService.ConnectToSavedProfileAsync(network.Name);
 
             if(!success)
             {
@@ -466,7 +478,7 @@ namespace DnsChanger
                 CustomDialog.ShowInfo($"به {network.Name} متصل شدی.");
                 _activityLog.Add($"به Wi-Fi «{network.Name}» متصل شد");
                 LoadHistory();
-                LoadWifiNetworks();
+                await LoadWifiNetworksAsync();
                 RefreshConnectionStatus();
             }
             else
@@ -487,7 +499,7 @@ namespace DnsChanger
             Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
             e.Handled = true;
         }
-        private void NavItem_Click(object sender, RoutedEventArgs e)
+        private async void NavItem_Click(object sender, RoutedEventArgs e)
         {
             if (sender is not Button clickedButton) return;
             string targetPage = clickedButton.Tag?.ToString();
@@ -508,7 +520,7 @@ namespace DnsChanger
                 case "Troubleshoot": TroubleshootPagePanel.Visibility = Visibility.Visible; break;
                 case "Wifi":
                     WifiPagePanel.Visibility = Visibility.Visible;
-                    LoadWifiNetworks();
+                    await LoadWifiNetworksAsync();
                     break;
                 case "Settings": SettingsPagePanel.Visibility = Visibility.Visible; break;
             }

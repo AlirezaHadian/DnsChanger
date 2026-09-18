@@ -16,20 +16,21 @@ namespace DnsChanger.Services
         {
             var result = new SpeedTestResult();
 
-            progress?.Report(new SpeedTestProgress { Phase = "در حال تست پینگ...", CurrentMbps = 0, PercentComplete = 0 });
+            progress?.Report(new SpeedTestProgress { Phase = "در حال شناسایی دیتاسنتر" });
+            result.DataCenter = await GetDataCenterAsync().ConfigureAwait(false);
+            progress?.Report(new SpeedTestProgress { Phase = "آماده‌ی تست دانلود...", DataCenter = result.DataCenter });
+
+            result.DownloadMbps = await TestDownloadAsync(progress).ConfigureAwait(false);
+            progress.Report(new SpeedTestProgress { Phase = "آماده‌ی تست آپلود ...", FinalDownloadMbps = result.DownloadMbps });
+
+            result.UploadMbps = await TestUploadAsync(progress).ConfigureAwait(false);
+            progress?.Report(new SpeedTestProgress { Phase = "در حال تست پینگ...", FinalUploadMbps = result.UploadMbps });
+
             var (avgPing, jitter) = await MeasureLatencyAsync().ConfigureAwait(false);
             result.PingMs = avgPing;
             result.JitterMs = jitter;
 
-            progress?.Report(new SpeedTestProgress { Phase = "در حال شناسایی دیتاسنتر...", CurrentMbps = 0, PercentComplete = 0 });
-
-            result.DataCenter = await GetDataCenterAsync().ConfigureAwait(false);
-            progress?.Report(new SpeedTestProgress { Phase = "آماده‌ی تست سرعت...", DataCenter = result.DataCenter });
-
-            result.DownloadMbps = await TestDownloadAsync(progress).ConfigureAwait(false);
-            result.UploadMbps = await TestUploadAsync(progress).ConfigureAwait(false);
-
-            progress?.Report(new SpeedTestProgress { Phase = "تمام شد", CurrentMbps = 0, PercentComplete = 100 });
+            progress?.Report(new SpeedTestProgress { Phase = "تمام شد", PercentComplete = 100 });
             return result;
         }
         private async Task<(long avgPing, long jitter)> MeasureLatencyAsync()

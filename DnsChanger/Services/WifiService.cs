@@ -10,55 +10,62 @@ namespace DnsChanger.Services
 {
     public class WifiService : IWifiService
     {
-        public List<WifiNetworkInfo> GetAvailableNetworks()
+        public Task<List<WifiNetworkInfo>> GetAvailableNetworks()
         {
-            var connectedSsids = NativeWifi.EnumerateConnectedNetworkSsids()
-                .Select(s => s.ToString())
-                .ToHashSet();
-
-            var networks = NativeWifi.EnumerateAvailableNetworks()
-                .Where(n => !string.IsNullOrEmpty(n.Ssid.ToString()))
-                .GroupBy(n => n.Ssid.ToString())
-                .Select(g => g.OrderByDescending(n => n.SignalQuality).First());
-
-            var result = networks.Select(n => new WifiNetworkInfo
+            return Task.Run(() =>
             {
-                Name = n.Ssid.ToString(),
-                SignalPercent = (int)n.SignalQuality,
-                IsSecured = n.IsSecurityEnabled,
-                IsConnected = connectedSsids.Contains(n.Ssid.ToString())
-            })
-                    .OrderByDescending(n => n.IsConnected)
-    .ThenByDescending(n => n.SignalPercent)
-    .ToList();
+                var connectedSsids = NativeWifi.EnumerateConnectedNetworkSsids()
+    .Select(s => s.ToString())
+    .ToHashSet();
 
-            return result;
+                var networks = NativeWifi.EnumerateAvailableNetworks()
+                    .Where(n => !string.IsNullOrEmpty(n.Ssid.ToString()))
+                    .GroupBy(n => n.Ssid.ToString())
+                    .Select(g => g.OrderByDescending(n => n.SignalQuality).First());
+
+                return networks.Select(n => new WifiNetworkInfo
+                {
+                    Name = n.Ssid.ToString(),
+                    SignalPercent = (int)n.SignalQuality,
+                    IsSecured = n.IsSecurityEnabled,
+                    IsConnected = connectedSsids.Contains(n.Ssid.ToString())
+                })
+                        .OrderByDescending(n => n.IsConnected)
+        .ThenByDescending(n => n.SignalPercent)
+        .ToList();
+            });
+
         }
         public async Task<bool> ConnectWithPasswordAsync(string ssid, string password, bool isSecured)
         {
-            var interfaceId = NativeWifi.EnumerateInterfaces().FirstOrDefault()?.Id;
-            if (interfaceId == null) return false;
+            if (isSecured && (string.IsNullOrEmpty(password) || password.Length < 8 || password.Length > 63))
+                return false;
+            try
+            {
+                var interfaceId = await Task.Run(() => NativeWifi.EnumerateInterfaces().FirstOrDefault()?.Id);
+                if (interfaceId == null) return false;
 
-            string profileXml = isSecured ? BuildSecuredProfileXml(ssid, password) : BuildOpenProfileXml(ssid);
+                string profileXml = isSecured ? BuildSecuredProfileXml(ssid, password) : BuildOpenProfileXml(ssid);
 
-            bool profileSet = NativeWifi.SetProfile(
-                interfaceId.Value,
-                ProfileType.AllUser,
-                profileXml,
-                null,
-                overwrite: true);
+                bool profileSet = await Task.Run(() => NativeWifi.SetProfile(
+            interfaceId.Value, ProfileType.AllUser, profileXml, null, overwrite: true));
 
-            if (!profileSet) return false;
+                if (!profileSet) return false;
 
-            return await NativeWifi.ConnectNetworkAsync(
-                interfaceId.Value,
-                ssid,
-                BssType.Infrastructure,
-                TimeSpan.FromSeconds(10));
+                return await NativeWifi.ConnectNetworkAsync(
+                    interfaceId.Value,
+                    ssid,
+                    BssType.Infrastructure,
+                    TimeSpan.FromSeconds(10));
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                return false;
+            }
         }
         public async Task<bool> ConnectToSavedProfileAsync(string ssid)
         {
-            var interfaceId = NativeWifi.EnumerateInterfaces().FirstOrDefault()?.Id;
+            var interfaceId = await Task.Run(() => NativeWifi.EnumerateInterfaces().FirstOrDefault()?.Id);
             if (interfaceId == null) return false;
 
             return await NativeWifi.ConnectNetworkAsync(
@@ -67,13 +74,9 @@ namespace DnsChanger.Services
                 BssType.Infrastructure,
                 TimeSpan.FromSeconds(10));
         }
-        public bool HasSavedProfile(string ssid)
+        public Task<bool> HasSavedProfileAsync(string ssid)
         {
-            var interfaceId = NativeWifi.EnumerateInterfaces().FirstOrDefault()?.Id;
-            if (interfaceId == null) return false;
-
-            return NativeWifi.EnumerateProfileNames()
-                .Any(name => name == ssid);
+            return Task.Run(() => NativeWifi.EnumerateProfileNames().Any(name => name == ssid));
         }
         private string BuildSecuredProfileXml(string ssid, string password) => $@"<?xml version=""1.0""?>
 <WLANProfile xmlns=""http://www.microsoft.com/networking/WLAN/profile/v1"">
@@ -96,7 +99,6 @@ namespace DnsChanger.Services
         </security>
     </MSM>
 </WLANProfile>";
-
         private string BuildOpenProfileXml(string ssid) => $@"<?xml version=""1.0""?>
 <WLANProfile xmlns=""http://www.microsoft.com/networking/WLAN/profile/v1"">
     <name>{ssid}</name>
