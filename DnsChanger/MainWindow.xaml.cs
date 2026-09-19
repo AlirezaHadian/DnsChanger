@@ -25,15 +25,18 @@ namespace DnsChanger
         private readonly IPingService _pingService;
         private readonly ISpeedTestService _speedTestService;
         private readonly IWifiService _wifiService;
+        private readonly IIpInfoService _ipInfoService;
+
         private readonly ObservableCollection<CustomDnsEntry> _customDnsEntries = new();
         private readonly List<double> _speedChartValues = new();
         private DispatcherTimer _messageTimer;
         private Storyboard _spinnerStoryboard;
         private System.Windows.Forms.NotifyIcon _trayIcon;
+        private Window _trayMenuHost;
         private bool _isExiting = false;
 
         public MainWindow(IDnsService dnsService, ICustomDnsRepository customDnsRepository, INetworkDiagnosticsService diagnosticsService,
-            IActivityLogRepository activityLog, IPingService pingService, ISpeedTestService speedTestService, IWifiService wifiService)
+            IActivityLogRepository activityLog, IPingService pingService, ISpeedTestService speedTestService, IWifiService wifiService, IIpInfoService ipInfoService)
         {
             InitializeComponent();
             _dnsService = dnsService;
@@ -43,6 +46,7 @@ namespace DnsChanger
             _pingService = pingService;
             _speedTestService = speedTestService;
             _wifiService = wifiService;
+            _ipInfoService = ipInfoService;
 
             CustomDnsItemsControl.ItemsSource = _customDnsEntries;
             LoadCustomDnsEntries();
@@ -88,6 +92,7 @@ namespace DnsChanger
             NetworkChange.NetworkAvailabilityChanged -= NetworkChange_NetworkAvailabilityChanged;
             NetworkChange.NetworkAddressChanged -= NetworkChange_NetworkAddressChanged;
             _trayIcon?.Dispose();
+            _trayMenuHost?.Close();
             base.OnClosed(e);
         }
         #region DNS 
@@ -251,7 +256,6 @@ namespace DnsChanger
         }
         #endregion
         #region SpeedTest
-        //New: check this
         private async void StartSpeedTestButton_Click(object sender, RoutedEventArgs e)
         {
             StartSpeedTestButton.IsEnabled = false;
@@ -319,7 +323,6 @@ namespace DnsChanger
 
             StartSpeedTestButton.IsEnabled = true;
         }
-
         private void UpdateProgressRing(double percent)
         {
             const double radius = 95; // (200 - 10) / 2 — چون Width=200 و StrokeThickness=10
@@ -329,7 +332,6 @@ namespace DnsChanger
             double gap = Math.Max(0.001, circumferenceInUnits - dash);
             SpeedTestProgressRing.StrokeDashArray = new System.Windows.Media.DoubleCollection { dash, gap };
         }
-
         private void AddSpeedChartPoint(double mbps)
         {
             _speedChartValues.Add(mbps);
@@ -351,13 +353,11 @@ namespace DnsChanger
             }
             SpeedChartLine.Points = points;
         }
-
         private void ClearSpeedChart()
         {
             _speedChartValues.Clear();
             SpeedChartLine.Points = new System.Windows.Media.PointCollection();
         }
-
         private void StartIndeterminateSpinner()
         {
             SpeedTestProgressRing.StrokeDashArray = new System.Windows.Media.DoubleCollection { 2.2, 7 };
@@ -435,7 +435,13 @@ namespace DnsChanger
         #region Wifi
         private async Task LoadWifiNetworksAsync()
         {
-            WifiNetworksItemsControl.ItemsSource = await _wifiService.GetAvailableNetworks();
+            WifiLoadingText.Visibility = Visibility.Visible;
+            WifiNetworksItemsControl.ItemsSource = null;
+
+            var networks = await _wifiService.GetAvailableNetworks();
+
+            WifiNetworksItemsControl.ItemsSource = networks;
+            WifiLoadingText.Visibility = Visibility.Collapsed;
         }
         private async void RefreshWifiButton_Click(object sender, RoutedEventArgs e)
         {
@@ -443,7 +449,7 @@ namespace DnsChanger
         }
         private async void ConnectWifi_Click(object sender, RoutedEventArgs e)
         {
-            if(sender is not Button button || button.Tag is not WifiNetworkInfo network) return;
+            if (sender is not Button button || button.Tag is not WifiNetworkInfo network) return;
 
             button.IsEnabled = false;
             var originalContent = button.Content;
@@ -453,13 +459,13 @@ namespace DnsChanger
 
             if (await _wifiService.HasSavedProfileAsync(network.Name)) success = await _wifiService.ConnectToSavedProfileAsync(network.Name);
 
-            if(!success)
+            if (!success)
             {
                 string password = null;
                 if (network.IsSecured)
                 {
                     password = CustomDialog.PromptPassword(network.Name);
-                    if(password == null)
+                    if (password == null)
                     {
                         button.IsEnabled = true;
                         button.Content = originalContent;
@@ -487,6 +493,49 @@ namespace DnsChanger
             }
         }
         #endregion
+        #region Ip Info
+        private async Task LoadMyIpInfoAsync()
+        {
+            try
+            {
+                var info = await _ipInfoService.GetIpInfoAsync();
+                MyIpAddressText.Text = info.IpAddress;
+                MyIpLocationText.Text = $"{info.CountryName} / {info.CityName}";
+                MyIpIspText.Text = info.Isp;
+                MyIpTimezoneText.Text = info.TimeZone;
+            }
+            catch
+            {
+                MyIpAddressText.Text = "خطا در دریافت اطلاعات"; 
+            }
+        }
+
+        private async void CheckCustomIpButton_Click(object sender, RoutedEventArgs e)
+        {
+            string ip = CustomIpBox.Text.Trim();
+            if (!System.Net.IPAddress.TryParse(ip, out _))
+            {
+                CustomDialog.ShowError("لطفاً یک IP معتبر وارد کن.");
+                return;
+            }
+
+            try
+            {
+                var info = await _ipInfoService.GetIpInfoAsync(ip);
+                CustomIpAddressText.Text = info.IpAddress;
+                CustomIpLocationText.Text = $"{info.CountryName} / {info.CityName}";
+                CustomIpIspText.Text = info.Isp;
+                CustomIpTimezoneText.Text = info.TimeZone;
+                CustomIpResultsPanel.Visibility = Visibility.Visible;
+
+                CustomIpProxyBadge.Visibility = info.IsProxy ? Visibility.Visible : Visibility.Collapsed;
+            }
+            catch
+            {
+                CustomDialog.ShowError("دریافت اطلاعات این IP ناموفق بود.");
+            }
+        }
+        #endregion
         #region History
         private void LoadHistory()
         {
@@ -509,6 +558,7 @@ namespace DnsChanger
             SpeedTestPagePanel.Visibility = Visibility.Collapsed;
             TroubleshootPagePanel.Visibility = Visibility.Collapsed;
             WifiPagePanel.Visibility = Visibility.Collapsed;
+            IpInfoPagePanel.Visibility = Visibility.Collapsed;
             SettingsPagePanel.Visibility = Visibility.Collapsed;
 
             // نمایش فقط صفحه‌ی انتخاب‌شده
@@ -522,16 +572,22 @@ namespace DnsChanger
                     WifiPagePanel.Visibility = Visibility.Visible;
                     await LoadWifiNetworksAsync();
                     break;
+                case "IpInfo":
+                    IpInfoPagePanel.Visibility = Visibility.Visible;
+                    await LoadMyIpInfoAsync();
+                    break;
                 case "Settings": SettingsPagePanel.Visibility = Visibility.Visible; break;
             }
 
             // برگردوندن استایل عادی به همه‌ی دکمه‌های Sidebar
-            NavDnsButton.Style = (Style)FindResource("SidebarButtonStyle");
-            NavHistoryButton.Style = (Style)FindResource("SidebarButtonStyle");
-            NavSpeedTestButton.Style = (Style)FindResource("SidebarButtonStyle");
-            NavTroubleshootButton.Style = (Style)FindResource("SidebarButtonStyle");
-            NavWifiButton.Style = (Style)FindResource("SidebarButtonStyle");
-            NavSettingsButton.Style = (Style)FindResource("SidebarButtonStyle");
+            Style defaultStyle = (Style)FindResource("SidebarButtonStyle");
+            NavDnsButton.Style = defaultStyle;
+            NavHistoryButton.Style = defaultStyle;
+            NavSpeedTestButton.Style = defaultStyle;
+            NavTroubleshootButton.Style = defaultStyle;
+            NavWifiButton.Style = defaultStyle;
+            NavSettingsButton.Style = defaultStyle;
+            NavIpInfoButton.Style = defaultStyle;
 
             // دادن استایل فعال به دکمه‌ای که کلیک شده
             clickedButton.Style = (Style)FindResource("SidebarButtonActiveStyle");
@@ -608,6 +664,14 @@ namespace DnsChanger
 
             CustomDialog.ShowInfo("ترجمه‌ی کامل رابط کاربری رو قدم بعد با هم پیاده می‌کنیم.");
         }
+        private void MinimizeButton_Click(object sender, RoutedEventArgs e)
+        {
+            WindowState = WindowState.Minimized;
+        }
+        private void CloseButton_Click(object sender, RoutedEventArgs e)
+        {
+            Close();
+        }
         #endregion
         #region Windows Tray
         private void InitializeTrayIcon()
@@ -620,34 +684,121 @@ namespace DnsChanger
                 Text = "DNS Changer"
             };
 
-            var contextMenu = new System.Windows.Forms.ContextMenuStrip();
-            contextMenu.Items.Add("باز کردن", null, (s, e) => ShowFromTray());
-            contextMenu.Items.Add("خروج", null, (s, e) => ExitApplication());
-            _trayIcon.ContextMenuStrip = contextMenu;
+            _trayIcon.MouseUp += TrayIcon_MouseUp;
 
-            _trayIcon.DoubleClick += (s, e) => ShowFromTray();
+            _trayMenuHost = new Window
+            {
+                Width = 0,
+                Height = 0,
+                WindowStyle = WindowStyle.None,
+                ShowInTaskbar = false,
+                AllowsTransparency = true,
+                Background = System.Windows.Media.Brushes.Transparent,
+                Left = -2000,
+                Top = -2000
+            };
+            _trayMenuHost.Show();
         }
+        private void TrayIcon_MouseUp(object sender, System.Windows.Forms.MouseEventArgs e)
+        {
+            if (e.Button == System.Windows.Forms.MouseButtons.Right)
+            {
+                var menu = (ContextMenu)FindResource("TrayContextMenu");
+                menu.PlacementTarget = this;
+                menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+                _trayMenuHost.Activate();
+                menu.IsOpen = true;
+            }
+            else if (e.Button == System.Windows.Forms.MouseButtons.Left)
+            {
+                ShowFromTray();
+            }
+        }
+        private void TrayApplyDnsMenu_Click(object sender, RoutedEventArgs e)
+        {
+            var dnsListMenu = new ContextMenu
+            {
+                Background = (Brush)FindResource("BgCard"),
+                BorderBrush = (Brush)FindResource("BorderColor"),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(6),
+                Template = ((ContextMenu)FindResource("TrayContextMenu")).Template
+            };
 
+            foreach(var entry in _customDnsRepository.GetAllDns())
+            {
+                var item = new MenuItem
+                {
+                    Header = entry.Name,
+                    Style = (Style)FindResource("TrayMenuItemStyle")
+                };
+                item.Click += (s, ev) => ApplyProviderAndNotify(new DnsProvider
+                {
+                    Name = entry.Name,
+                    Primary = entry.Primary,
+                    Secondary = entry.Secondary
+                });
+                dnsListMenu.Items.Add(item);
+            }
+
+            dnsListMenu.PlacementTarget = (MenuItem)sender;
+            dnsListMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Right;
+            _trayMenuHost.Activate();
+            dnsListMenu.IsOpen = true;
+        }
+        private void TrayOpen_Click(object sender, RoutedEventArgs e) => ShowFromTray();
+        private void BuildTrayDnsMenu()
+        {
+            var menu = (ContextMenu)FindResource("TrayContextMenu");
+            var dnsMenu = menu.Items.OfType<MenuItem>().FirstOrDefault(m => (string)m.Header == "اعمال DNS");
+            if (dnsMenu == null) return;
+
+            dnsMenu.Items.Clear();
+
+            foreach (var entry in _customDnsRepository.GetAllDns())
+            {
+                var item = new MenuItem
+                {
+                    Header = entry.Name,
+                    Style = (Style)FindResource("TrayMenuItemStyle")
+                };
+                item.Click += (s, e) => ApplyProviderAndNotify(new DnsProvider
+                {
+                    Name = entry.Name,
+                    Primary = entry.Primary,
+                    Secondary = entry.Secondary
+                });
+                dnsMenu.Items.Add(item);
+            }
+        }
+        private void TrayResetDns_Click(object sender, RoutedEventArgs e)
+        {
+            _dnsService.UnsetDns();
+            _activityLog.Add("DNS به حالت خودکار (DHCP) بازنشانی شد — از Tray");
+        }
+        private async void TrayRunDiagnostics_Click(object sender, RoutedEventArgs e)
+        {
+            await _diagnosticsService.RunDiagnosticsAsync();
+            _activityLog.Add("تشخیص ورفع خودکار از Tray اجرا شد");
+        }
+        private void TrayExit_Click(object sender, RoutedEventArgs e) => ExitApplication();
         private void ShowFromTray()
         {
             Show();
             WindowState = WindowState.Normal;
             Activate();
         }
-
         private void ExitApplication()
         {
             _isExiting = true;
             Application.Current.Shutdown();
         }
-
         protected override void OnStateChanged(EventArgs e)
         {
             if (WindowState == WindowState.Minimized)
                 Hide();
             base.OnStateChanged(e);
         }
-
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
             if (!_isExiting)
@@ -658,5 +809,6 @@ namespace DnsChanger
             base.OnClosing(e);
         }
         #endregion
+
     }
 }
